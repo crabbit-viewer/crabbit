@@ -1,3 +1,4 @@
+use log::debug;
 use serde_json::Value;
 
 use super::types::{FetchResult, MediaItem, MediaPost, MediaType};
@@ -264,6 +265,7 @@ fn try_gallery(post: &Value, base: MediaPost) -> Option<MediaPost> {
 fn try_reddit_video(post: &Value, base: MediaPost) -> Option<MediaPost> {
     let reddit_video = post["media"]["reddit_video"].as_object()?;
     let fallback_url = reddit_video.get("fallback_url")?.as_str()?;
+    debug!("[parser] Reddit video: id={} fallback_url={} is_gif={}", base.id, fallback_url, reddit_video.get("is_gif").and_then(|v| v.as_bool()).unwrap_or(false));
     let width = reddit_video
         .get("width")
         .and_then(|v| v.as_u64())

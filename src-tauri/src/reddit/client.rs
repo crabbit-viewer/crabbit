@@ -127,7 +127,7 @@ pub async fn resolve_redgifs(client: &Client, posts: &mut Vec<super::types::Medi
         match result {
             Ok(video_url) => {
                 let proxy_url = format!(
-                    "http://media-proxy.localhost/{}",
+                    "media-proxy://localhost/{}",
                     percent_encoding::utf8_percent_encode(&video_url, percent_encoding::NON_ALPHANUMERIC)
                 );
                 let post = &mut posts[idx];
