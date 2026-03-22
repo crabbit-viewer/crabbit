@@ -186,13 +186,13 @@ fn parse_post(post: &Value) -> Option<MediaPost> {
         }
     }
 
-    // 11. Redgifs
+    // 11. Redgifs — store slug for async resolution in fetch_posts
     if domain.contains("redgifs.com") {
-        if let Some(embed) = redgifs_embed_url(url) {
+        if let Some(slug) = redgifs_slug(url) {
             return Some(MediaPost {
                 media_type: MediaType::Embed,
                 media: vec![],
-                embed_url: Some(embed),
+                embed_url: Some(format!("redgifs:{}", slug)),
                 ..base
             });
         }
@@ -323,11 +323,12 @@ fn youtube_embed_url(url: &str) -> Option<String> {
     None
 }
 
-fn redgifs_embed_url(url: &str) -> Option<String> {
-    // redgifs.com/watch/slug -> redgifs.com/ifr/slug
+fn redgifs_slug(url: &str) -> Option<String> {
     if let Some(slug) = url.rsplit("/watch/").next() {
         let slug = slug.split('?').next().unwrap_or(slug);
-        return Some(format!("https://www.redgifs.com/ifr/{}", slug));
+        if !slug.is_empty() {
+            return Some(slug.to_lowercase());
+        }
     }
     None
 }

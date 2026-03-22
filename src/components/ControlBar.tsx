@@ -78,6 +78,7 @@ export function ControlBar({ onNext, onPrev, onTogglePlay }: Props) {
       >
         {state.isMuted ? "🔇" : "🔊"}
       </button>
+      <span className="text-white/50 text-xs w-8">{state.volume}%</span>
 
       <button
         onClick={toggleFavorite}

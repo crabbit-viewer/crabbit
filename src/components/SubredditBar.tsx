@@ -1,7 +1,51 @@
-import { useState, useContext, useEffect, FormEvent } from "react";
+import { useState, useContext, useEffect, useRef, FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { AppStateContext, AppDispatchContext } from "../state/context";
 import { useReddit } from "../hooks/useReddit";
+
+function Dropdown({ value, options, onChange }: {
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const label = options.find((o) => o.value === value)?.label ?? value;
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="bg-white/10 text-white text-sm rounded px-2 py-1 outline-none hover:bg-white/20"
+      >
+        {label} ▾
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded shadow-lg min-w-[120px] z-20">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className={`block w-full text-left px-3 py-1.5 text-sm ${
+                opt.value === value ? "text-white bg-white/10" : "text-white/80 hover:bg-white/10"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function SubredditBar() {
   const state = useContext(AppStateContext);
@@ -34,13 +78,19 @@ export function SubredditBar() {
   const handleSortChange = (sort: string) => {
     dispatch({ type: "SET_SORT", payload: sort });
     dispatch({ type: "SET_PLAYING", payload: false });
-    // Re-fetch will happen via effect in App
   };
 
   const handleTimeChange = (time: string) => {
     dispatch({ type: "SET_TIME_RANGE", payload: time });
     dispatch({ type: "SET_PLAYING", payload: false });
   };
+
+  // Re-fetch posts when sort or time range changes
+  useEffect(() => {
+    if (state.subreddit && state.posts.length > 0) {
+      fetchPosts();
+    }
+  }, [state.sort, state.timeRange]);
 
   return (
     <div className="absolute top-0 left-0 right-0 h-12 bg-black/70 flex items-center px-4 gap-3 z-10">
@@ -63,31 +113,31 @@ export function SubredditBar() {
         </button>
       </form>
 
-      <select
+      <Dropdown
         value={state.sort}
-        onChange={(e) => handleSortChange(e.target.value)}
-        className="bg-white/10 text-white text-sm rounded px-2 py-1 outline-none"
-      >
-        <option value="hot">Hot</option>
-        <option value="new">New</option>
-        <option value="top">Top</option>
-        <option value="rising">Rising</option>
-        <option value="controversial">Controversial</option>
-      </select>
+        options={[
+          { value: "hot", label: "Hot" },
+          { value: "new", label: "New" },
+          { value: "top", label: "Top" },
+          { value: "rising", label: "Rising" },
+          { value: "controversial", label: "Controversial" },
+        ]}
+        onChange={handleSortChange}
+      />
 
       {(state.sort === "top" || state.sort === "controversial") && (
-        <select
+        <Dropdown
           value={state.timeRange}
-          onChange={(e) => handleTimeChange(e.target.value)}
-          className="bg-white/10 text-white text-sm rounded px-2 py-1 outline-none"
-        >
-          <option value="hour">Hour</option>
-          <option value="day">Day</option>
-          <option value="week">Week</option>
-          <option value="month">Month</option>
-          <option value="year">Year</option>
-          <option value="all">All Time</option>
-        </select>
+          options={[
+            { value: "hour", label: "Hour" },
+            { value: "day", label: "Day" },
+            { value: "week", label: "Week" },
+            { value: "month", label: "Month" },
+            { value: "year", label: "Year" },
+            { value: "all", label: "All Time" },
+          ]}
+          onChange={handleTimeChange}
+        />
       )}
 
       {/* Favorites dropdown */}

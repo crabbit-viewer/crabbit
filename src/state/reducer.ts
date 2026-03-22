@@ -14,6 +14,7 @@ export interface AppState {
   timeRange: string;
   galleryIndex: number;
   isMuted: boolean;
+  volume: number;
 }
 
 export const initialState: AppState = {
@@ -30,6 +31,7 @@ export const initialState: AppState = {
   timeRange: "day",
   galleryIndex: 0,
   isMuted: false,
+  volume: 100,
 };
 
 export type AppAction =
@@ -50,7 +52,8 @@ export type AppAction =
   | { type: "SET_GALLERY_INDEX"; payload: number }
   | { type: "NEXT_GALLERY" }
   | { type: "PREV_GALLERY" }
-  | { type: "TOGGLE_MUTE" };
+  | { type: "TOGGLE_MUTE" }
+  | { type: "SET_VOLUME"; payload: number };
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -109,6 +112,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     }
     case "TOGGLE_MUTE":
       return { ...state, isMuted: !state.isMuted };
+    case "SET_VOLUME":
+      return { ...state, volume: Math.max(0, Math.min(100, action.payload)) };
     default:
       return state;
   }
