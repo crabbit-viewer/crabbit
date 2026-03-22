@@ -9,18 +9,19 @@ export function Notification() {
     if (!state.notification) return;
     const timer = setTimeout(() => {
       dispatch({ type: "SET_NOTIFICATION", payload: null });
-    }, 3000);
+    }, 2000);
     return () => clearTimeout(timer);
   }, [state.notification, dispatch]);
 
   if (!state.notification) return null;
 
-  const bgColor =
-    state.notification.type === "success" ? "bg-green-600" : "bg-red-600";
+  const isError = state.notification.type === "error";
 
   return (
     <div
-      className={`fixed top-16 right-4 ${bgColor} text-white text-sm px-4 py-2 rounded shadow-lg z-50 animate-fade-in`}
+      className={`fixed top-12 left-1/2 -translate-x-1/2 ${
+        isError ? "text-red-400" : "text-white/60"
+      } text-xs px-3 py-1.5 bg-black/70 backdrop-blur-sm rounded-full border border-white/10 z-50 animate-fade-in`}
     >
       {state.notification.message}
     </div>
