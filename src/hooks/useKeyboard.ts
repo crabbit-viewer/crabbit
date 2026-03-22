@@ -4,7 +4,8 @@ import { AppStateContext, AppDispatchContext } from "../state/context";
 export function useKeyboard(
   next: () => void,
   prev: () => void,
-  togglePlay: () => void
+  togglePlay: () => void,
+  savePost: () => void
 ) {
   const state = useContext(AppStateContext);
   const dispatch = useContext(AppDispatchContext);
@@ -66,7 +67,11 @@ export function useKeyboard(
           dispatch({ type: "TOGGLE_OVERLAY" });
           break;
         case "f":
+          // Save post (no shift)
+          savePost();
+          break;
         case "F":
+          // Fullscreen (shift held)
           if (document.fullscreenElement) {
             document.exitFullscreen();
           } else {
@@ -84,7 +89,7 @@ export function useKeyboard(
           break;
       }
     },
-    [next, prev, togglePlay, dispatch, currentPost, state.galleryIndex, state.volume]
+    [next, prev, togglePlay, savePost, dispatch, currentPost, state.galleryIndex, state.volume]
   );
 
   useEffect(() => {
