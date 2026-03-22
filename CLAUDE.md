@@ -1,0 +1,67 @@
+# Crabbit
+
+Reddit media slideshow viewer — a desktop app modeled on redditp.com. Tauri v2 (Rust backend) + React/Vite/TypeScript frontend with Tailwind CSS.
+
+## Build Environment
+
+Claude runs in WSL2 but all tooling runs natively on Windows. Use `.exe`/`.cmd` suffixes:
+
+- `cargo.exe`, `rustc.exe`, `rustup.exe` — Rust toolchain
+- `node.exe` — Node.js runtime
+- npm/npx can't run via `.cmd` in bash — use the wrapper scripts: `./npm.sh`, `./npx.sh`
+
+## Build Commands
+
+```bash
+# TypeScript type check
+./npx.sh tsc --noEmit
+
+# Build frontend only
+./npx.sh vite build
+
+# Rust check (from project root)
+cd src-tauri && cargo.exe check
+
+# Full Tauri build (frontend + Rust + installer)
+./npx.sh tauri build
+
+# Dev mode
+./npx.sh tauri dev
+```
+
+## Architecture
+
+**Core principle:** Rust does all fetching, parsing, and classification. Frontend is a display layer that calls `invoke('fetch_posts')` and renders `MediaPost[]` data.
+
+### Rust Backend (`src-tauri/src/`)
+
+- `lib.rs` — Tauri setup, AppState (reqwest client, favorites), command registration
+- `reddit/client.rs` — HTTP client, URL construction, `fetch_listing()`
+- `reddit/parser.rs` — Post classification (13-step priority) + media URL extraction
+- `reddit/types.rs` — `MediaPost`, `MediaItem`, `FetchResult`, `FetchParams`
+- `favorites.rs` — Read/write favorites JSON in Tauri app data dir
+
+Tauri commands: `fetch_posts`, `get_favorites`, `add_favorite`, `remove_favorite`
+
+### Frontend (`src/`)
+
+- `state/` — `useReducer` + Context (`AppState`, `AppDispatch`)
+- `hooks/` — `useReddit` (fetch/paginate), `useSlideshow` (timer/prefetch/preload), `useKeyboard` (shortcuts)
+- `components/` — `SubredditBar`, `SlideshowView`, `MediaDisplay`, `ImageSlide`, `VideoSlide`, `GallerySlide`, `EmbedSlide`, `PostOverlay`, `ControlBar`, `LoadingSpinner`, `ErrorDisplay`
+
+## Reddit API Notes
+
+- Uses public `.json` API, no OAuth. User-Agent: `desktop:crabbit:v0.1.0`
+- **Always use `raw_json=1`** query param — prevents `&amp;` encoding in URLs
+- v.redd.it audio is a separate stream: `DASH_AUDIO_128.mp4` (not all videos have audio)
+- Gallery ordering comes from `gallery_data.items`, not `media_metadata` keys
+- `post_hint` is unreliable — always fall back to URL/domain checks
+- Use `serde_json::Value` for `media`/`preview`/`media_metadata` — Reddit's structures are too inconsistent for full typing
+
+## Keyboard Shortcuts
+
+Arrow keys (nav/gallery), Space (play/pause), T (overlay), F (fullscreen), M (mute), Escape (exit fullscreen)
+
+## Testing
+
+Test subs: `r/earthporn` (images), `r/oddlysatisfying` (v.redd.it video), `r/houseplants` (galleries), `r/earthporn+spaceporn` (multi). Check YouTube/redgifs embeds load in iframes. Verify CSP doesn't block media domains.
