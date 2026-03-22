@@ -257,6 +257,12 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
         </button>
         {showFavs && favorites.length > 0 && (
           <div className="absolute right-0 top-full mt-1 bg-black/90 backdrop-blur-sm border border-white/10 rounded-lg shadow-2xl min-w-[140px] z-20 py-1">
+            <button
+              onClick={() => loadFavorite(favorites.join('+'))}
+              className="block w-full text-left text-blue-400 hover:text-blue-300 hover:bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors border-b border-white/10"
+            >
+              Browse All
+            </button>
             {favorites.map((fav) => (
               <button
                 key={fav}
