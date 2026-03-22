@@ -2,6 +2,7 @@ mod config;
 mod favorites;
 mod reddit;
 mod saved;
+mod videoserver;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -12,6 +13,7 @@ use reddit::client::{build_client, fetch_listing, resolve_redgifs};
 use reddit::parser::parse_listing;
 use reddit::types::{FetchParams, FetchResult, MediaPost};
 use percent_encoding::percent_decode_str;
+use sha2::{Sha256, Digest};
 use tauri::Manager;
 use tauri::http::{Response as HttpResponse, StatusCode};
 
@@ -19,30 +21,35 @@ pub struct AppState {
     pub client: reqwest::Client,
     pub favorites_path: PathBuf,
     pub favorites: Mutex<Vec<String>>,
-    pub video_cache: Mutex<HashMap<String, CachedVideo>>,
+    pub video_cache: videoserver::VideoCache,
     pub config_path: PathBuf,
     pub save_path: Mutex<PathBuf>,
     pub saved_ids: Mutex<HashSet<String>>,
 }
 
-pub struct CachedVideo {
-    bytes: Vec<u8>,
-    content_type: String,
+fn url_to_cache_key(url: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(url.as_bytes());
+    hex::encode(hasher.finalize())
 }
 
 /// Decode a media-proxy URL back to the real URL, or return the original.
 pub fn decode_proxy_url(url: &str) -> String {
-    if let Some(encoded) = url.strip_prefix("http://media-proxy.localhost/") {
+    if let Some(encoded) = url.strip_prefix("media-proxy://localhost/").or_else(|| url.strip_prefix("http://media-proxy.localhost/")) {
         percent_decode_str(encoded).decode_utf8_lossy().to_string()
     } else {
         url.to_string()
     }
 }
 
-/// Evict entries from the video cache when it exceeds the limit.
-fn ensure_cache_capacity(cache: &mut HashMap<String, CachedVideo>) {
-    if cache.len() >= 10 {
-        cache.clear();
+/// Evict half the cache when it exceeds the limit.
+fn ensure_cache_capacity(cache: &mut HashMap<String, videoserver::CachedVideo>) {
+    if cache.len() >= 20 {
+        let keys: Vec<String> = cache.keys().take(10).cloned().collect();
+        for key in keys {
+            cache.remove(&key);
+        }
+        eprintln!("[cache] Evicted 10 entries, {} remaining", cache.len());
     }
 }
 
@@ -54,6 +61,8 @@ async fn fetch_posts(
     let sort = params.sort.as_deref().unwrap_or("hot");
     let time_range = params.time_range.as_deref().unwrap_or("day");
     let limit = params.limit.unwrap_or(25).min(100);
+
+    eprintln!("[fetch_posts] r/{} sort={} time={} limit={} after={:?}", params.subreddit, sort, time_range, limit, params.after);
 
     let listing = fetch_listing(
         &state.client,
@@ -67,6 +76,9 @@ async fn fetch_posts(
 
     let mut result = parse_listing(&listing);
     resolve_redgifs(&state.client, &mut result.posts).await;
+
+    eprintln!("[fetch_posts] Returned {} posts, after={:?}", result.posts.len(), result.after);
+
     Ok(result)
 }
 
@@ -108,16 +120,18 @@ async fn preload_video(
     url: String,
 ) -> Result<(), String> {
     let real_url = decode_proxy_url(&url);
+    let key = url_to_cache_key(&real_url);
 
     {
-        let cache = state.video_cache.lock().map_err(|e| e.to_string())?;
-        if cache.contains_key(&real_url) {
+        let cache = state.video_cache.lock().await;
+        if cache.contains_key(&key) {
             return Ok(());
         }
     }
 
-    debug!("[preload] Downloading: {}", real_url);
+    eprintln!("[preload] Downloading: {}", real_url);
     let resp = state.client.get(&real_url).send().await.map_err(|e| e.to_string())?;
+    let status = resp.status();
     let content_type = resp
         .headers()
         .get("content-type")
@@ -125,12 +139,58 @@ async fn preload_video(
         .unwrap_or("video/mp4")
         .to_string();
     let bytes = resp.bytes().await.map_err(|e| e.to_string())?.to_vec();
-    debug!("[preload] Cached {} bytes for: {}", bytes.len(), real_url);
+    eprintln!("[preload] Cached {} bytes (status={} type={}) for: {}", bytes.len(), status, content_type, real_url);
 
-    let mut cache = state.video_cache.lock().map_err(|e| e.to_string())?;
+    let mut cache = state.video_cache.lock().await;
     ensure_cache_capacity(&mut cache);
-    cache.insert(real_url, CachedVideo { bytes, content_type });
+    cache.insert(key, videoserver::CachedVideo { bytes, content_type });
     Ok(())
+}
+
+#[tauri::command]
+async fn fetch_video_bytes(
+    state: tauri::State<'_, AppState>,
+    url: String,
+) -> Result<tauri::ipc::Response, String> {
+    let real_url = decode_proxy_url(&url);
+    let key = url_to_cache_key(&real_url);
+
+    {
+        let cache = state.video_cache.lock().await;
+        if let Some(cached) = cache.get(&key) {
+            eprintln!("[fetch_video_bytes] Cache HIT: {} ({} bytes)", real_url, cached.bytes.len());
+            return Ok(tauri::ipc::Response::new(cached.bytes.clone()));
+        }
+    }
+
+    eprintln!("[fetch_video_bytes] Cache MISS, fetching: {}", real_url);
+    let resp = state.client.get(&real_url).send().await.map_err(|e| {
+        eprintln!("[fetch_video_bytes] Fetch error: {}", e);
+        format!("Fetch error: {}", e)
+    })?;
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("video/mp4")
+        .to_string();
+    if !status.is_success() {
+        let msg = format!("Upstream returned {} for {}", status, real_url);
+        eprintln!("[fetch_video_bytes] ERROR: {}", msg);
+        return Err(msg);
+    }
+    let bytes = resp.bytes().await.map_err(|e| {
+        eprintln!("[fetch_video_bytes] Body read error: {}", e);
+        format!("Body read error: {}", e)
+    })?.to_vec();
+    eprintln!("[fetch_video_bytes] Fetched {} bytes (type={}) for: {}", bytes.len(), content_type, real_url);
+
+    let result = tauri::ipc::Response::new(bytes.clone());
+    let mut cache = state.video_cache.lock().await;
+    ensure_cache_capacity(&mut cache);
+    cache.insert(key, videoserver::CachedVideo { bytes, content_type });
+    Ok(result)
 }
 
 #[tauri::command]
@@ -226,43 +286,28 @@ async fn open_save_folder(
     Ok(())
 }
 
-fn serve_bytes(bytes: &[u8], content_type: &str, range: &Option<String>) -> HttpResponse<Vec<u8>> {
+fn serve_bytes(bytes: &[u8], content_type: &str, _range: &Option<String>) -> HttpResponse<Vec<u8>> {
     let total = bytes.len();
-    if let Some(range_str) = range {
-        if let Some(range_val) = range_str.strip_prefix("bytes=") {
-            let parts: Vec<&str> = range_val.splitn(2, '-').collect();
-            let start: usize = parts[0].parse().unwrap_or(0);
-            let end: usize = if parts.len() > 1 && !parts[1].is_empty() {
-                parts[1].parse().unwrap_or(total - 1)
-            } else {
-                total - 1
-            };
-            let end = end.min(total - 1);
-            let slice = &bytes[start..=end];
-            return HttpResponse::builder()
-                .status(StatusCode::PARTIAL_CONTENT)
-                .header("Content-Type", content_type)
-                .header("Accept-Ranges", "bytes")
-                .header("Content-Range", format!("bytes {}-{}/{}", start, end, total))
-                .header("Content-Length", slice.len().to_string())
-                .body(slice.to_vec())
-                .unwrap();
-        }
-    }
+    eprintln!("[serve_bytes] 200 full {} bytes type={}", total, content_type);
     HttpResponse::builder()
         .status(StatusCode::OK)
         .header("Content-Type", content_type)
-        .header("Accept-Ranges", "bytes")
         .header("Content-Length", total.to_string())
         .body(bytes.to_vec())
         .unwrap()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
+pub fn run(verbose: bool) {
+    let video_cache: videoserver::VideoCache = std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .register_asynchronous_uri_scheme_protocol("media-proxy", |ctx, request, responder| {
+        .register_asynchronous_uri_scheme_protocol("media-proxy", move |ctx, request, responder| {
+            let method = request.method().to_string();
+            let uri_str = request.uri().to_string();
+            let headers: Vec<String> = request.headers().iter().map(|(k, v)| format!("{}={}", k, v.to_str().unwrap_or("?"))).collect();
+            eprintln!("[media-proxy] INCOMING {} {} headers=[{}]", method, uri_str, headers.join(", "));
             let app_handle = ctx.app_handle().clone();
             let range_header = request.headers().get("range").and_then(|v| v.to_str().ok()).map(|s| s.to_string());
             tauri::async_runtime::spawn(async move {
@@ -273,9 +318,10 @@ pub fn run() {
                     .or_else(|| uri.strip_prefix("media-proxy://localhost/"))
                     .unwrap_or("");
                 let video_url = percent_decode_str(encoded_url).decode_utf8_lossy().to_string();
-                debug!("[media-proxy] Request: {} -> {} (range: {:?})", uri, video_url, range_header);
+                eprintln!("[media-proxy] Decoded: {} -> {} (range: {:?})", uri, video_url, range_header);
 
                 if video_url.is_empty() {
+                    eprintln!("[media-proxy] ERROR: empty URL after decoding");
                     responder.respond(
                         HttpResponse::builder()
                             .status(StatusCode::BAD_REQUEST)
@@ -286,18 +332,21 @@ pub fn run() {
                 }
 
                 let state = app_handle.state::<AppState>();
+                let key = url_to_cache_key(&video_url);
 
                 {
-                    let cache = state.video_cache.lock().unwrap();
-                    if let Some(cached) = cache.get(&video_url) {
-                        debug!("[media-proxy] Serving from cache: {} ({} bytes)", video_url, cached.bytes.len());
+                    let cache = state.video_cache.lock().await;
+                    if let Some(cached) = cache.get(&key) {
+                        eprintln!("[media-proxy] Cache HIT: {} ({} bytes)", video_url, cached.bytes.len());
                         responder.respond(serve_bytes(&cached.bytes, &cached.content_type, &range_header));
                         return;
                     }
                 }
 
+                eprintln!("[media-proxy] Cache MISS, fetching: {}", video_url);
                 match state.client.get(&video_url).send().await {
                     Ok(resp) => {
+                        let status = resp.status();
                         let content_type = resp
                             .headers()
                             .get("content-type")
@@ -305,22 +354,24 @@ pub fn run() {
                             .unwrap_or("video/mp4")
                             .to_string();
                         let content_length = resp.content_length().unwrap_or(0);
-                        debug!("[media-proxy] Response: {} bytes content-type={}", content_length, content_type);
+                        eprintln!("[media-proxy] Upstream: status={} type={} len={}", status, content_type, content_length);
+                        if !status.is_success() {
+                            eprintln!("[media-proxy] ERROR: upstream {} for {}", status, video_url);
+                        }
                         match resp.bytes().await {
                             Ok(bytes) => {
-                                debug!("[media-proxy] Serving {} bytes", bytes.len());
+                                eprintln!("[media-proxy] Serving {} bytes (type={})", bytes.len(), content_type);
                                 let bytes_vec = bytes.to_vec();
                                 let response = serve_bytes(&bytes_vec, &content_type, &range_header);
 
-                                if let Ok(mut cache) = state.video_cache.lock() {
-                                    ensure_cache_capacity(&mut cache);
-                                    cache.insert(video_url, CachedVideo { bytes: bytes_vec, content_type });
-                                }
+                                let mut cache = state.video_cache.lock().await;
+                                ensure_cache_capacity(&mut cache);
+                                cache.insert(key, videoserver::CachedVideo { bytes: bytes_vec, content_type });
 
                                 responder.respond(response);
                             }
                             Err(e) => {
-                                error!("[media-proxy] Body read error: {}", e);
+                                eprintln!("[media-proxy] ERROR reading body: {}", e);
                                 responder.respond(
                                     HttpResponse::builder()
                                         .status(StatusCode::BAD_GATEWAY)
@@ -331,7 +382,7 @@ pub fn run() {
                         }
                     }
                     Err(e) => {
-                        error!("[media-proxy] Fetch error: {}", e);
+                        eprintln!("[media-proxy] ERROR fetching: {}", e);
                         responder.respond(
                             HttpResponse::builder()
                                 .status(StatusCode::BAD_GATEWAY)
@@ -423,15 +474,25 @@ pub fn run() {
                 }
             });
         })
-        .setup(|app| {
-            app.handle().plugin(
-                tauri_plugin_log::Builder::default()
-                    .level(log::LevelFilter::Debug)
-                    .target(tauri_plugin_log::Target::new(
-                        tauri_plugin_log::TargetKind::Stderr,
-                    ))
-                    .build(),
-            )?;
+        .setup(move |app| {
+            let log_level = if verbose {
+                log::LevelFilter::Debug
+            } else {
+                log::LevelFilter::Warn
+            };
+
+            let log_builder = tauri_plugin_log::Builder::default()
+                .level(log_level)
+                .target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::Stderr,
+                ));
+
+            if verbose {
+                eprintln!("[crabbit] Verbose logging enabled");
+                eprintln!("[crabbit] media-proxy and saved-media protocol handlers registered");
+            }
+
+            app.handle().plugin(log_builder.build())?;
 
             let app_data_dir = app
                 .path()
@@ -449,7 +510,7 @@ pub fn run() {
                 client: build_client(),
                 favorites_path: fav_path,
                 favorites: Mutex::new(favs),
-                video_cache: Mutex::new(HashMap::new()),
+                video_cache: video_cache.clone(),
                 config_path: cfg_path,
                 save_path: Mutex::new(save_path),
                 saved_ids: Mutex::new(saved_ids),
@@ -463,6 +524,7 @@ pub fn run() {
             add_favorite,
             remove_favorite,
             preload_video,
+            fetch_video_bytes,
             save_post,
             get_saved_posts,
             delete_saved_post,

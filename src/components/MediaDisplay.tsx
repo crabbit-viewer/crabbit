@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { MediaPost } from "../types";
 import { ImageSlide } from "./ImageSlide";
 import { VideoSlide } from "./VideoSlide";
@@ -9,6 +10,11 @@ interface Props {
 }
 
 export function MediaDisplay({ post }: Props) {
+  useEffect(() => {
+    const url = post.media[0]?.url || post.embed_url || "(none)";
+    console.log(`[slide] id=${post.id} type=${post.media_type} sub=${post.subreddit} title="${post.title.slice(0, 60)}" url=${url}`);
+  }, [post.id]);
+
   switch (post.media_type) {
     case "image":
       return <ImageSlide item={post.media[0]} />;

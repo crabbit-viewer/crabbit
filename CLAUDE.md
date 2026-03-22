@@ -4,29 +4,48 @@ Reddit media slideshow viewer — a desktop app modeled on redditp.com. Tauri v2
 
 ## Build Environment
 
-Claude runs in WSL2 but all tooling runs natively on Windows. Use `.exe` suffixes:
+Claude runs inside a **Podman container** (Fedora-based, built from `Containerfile` in the workspace root). The host is Fedora immutable (Silverblue/Kinoite, home at `/var/home`).
 
-- `cargo.exe`, `rustc.exe`, `rustup.exe` — Rust toolchain
-- `bun.exe` — Bun runtime (package manager + script runner)
+**Key rules:**
+- **NEVER suggest installing packages on the host or in the container at runtime.** All dependencies go in the `Containerfile` and are baked into the image at build time. If something is missing, update the `Containerfile`.
+- **NEVER use `.exe` suffixes.** This is Linux, not Windows/WSL2.
+- The container is ephemeral (`--rm`) — anything not on a mounted volume is lost on exit.
+- **NEVER suggest the user run commands on the host** unless it's something only the host can do (e.g. updating the podman alias, adding SSH keys to GitHub). Even then, be aware that the host is immutable Fedora — no `dnf`/`apt`, use `rpm-ostree` only if truly necessary.
+
+**Mounted volumes (persisted across container restarts):**
+- `/workspace` → host `/home/user/projects` (repos live here — git repos, build artifacts all persist)
+- `/root/.claude` → host `~/.claude`
+- `/root/.ssh` → host `~/.ssh` (read-only)
+
+**Not persisted:** global git config, any packages installed at runtime, anything outside the mounts above. Per-repo git config (in `.git/config`) IS persisted since repos are under `/workspace`.
+
+Tools available in container: `cargo`, `rustc`, `rustup`, `bun`, `git`, `node`, `npm` (no `.exe` suffixes)
 
 ## Build Commands
 
 ```bash
 # TypeScript type check
-bun.exe tsc --noEmit
+bun tsc --noEmit
 
 # Build frontend only
-bun.exe vite build
+bun vite build
 
 # Rust check (from project root)
-cd src-tauri && cargo.exe check
+cd src-tauri && cargo check
 
-# Full Tauri build (frontend + Rust + installer)
-bun.exe tauri build
+# Full Tauri build with AppImage/deb/rpm bundles
+NO_STRIP=true bun tauri build
 
 # Dev mode
-bun.exe tauri dev
+bun tauri dev
 ```
+
+`NO_STRIP=true` is required because Fedora's libraries use `.relr.dyn` sections that linuxdeploy's bundled `strip` can't handle. `APPIMAGE_EXTRACT_AND_RUN=1` is set in the Containerfile (needed because the container has no FUSE).
+
+Build outputs:
+- `src-tauri/target/release/bundle/appimage/crabbit_<version>_amd64.AppImage`
+- `src-tauri/target/release/bundle/deb/crabbit_<version>_amd64.deb`
+- `src-tauri/target/release/bundle/rpm/crabbit-<version>-1.x86_64.rpm`
 
 ## Architecture
 
@@ -63,9 +82,9 @@ Arrow keys (nav/gallery), Space (play/pause), T (overlay), F (fullscreen), M (mu
 
 ## Workflow
 
-Always rebuild at the end of any code changes: `bun.exe vite build && bun.exe tauri build --no-bundle`. The first step builds the frontend into `dist/`, the second embeds it into the Rust binary producing `src-tauri/target/release/crabbit.exe`. Both steps are required — there is no `beforeBuildCommand` in tauri.conf.json so `tauri build` does NOT auto-run vite. **NEVER use `cargo.exe build` directly** — it compiles the Rust binary but does not embed the latest frontend assets. Always use `bun.exe tauri build --no-bundle` for the Rust step.
+Always rebuild at the end of any code changes: `NO_STRIP=true bun tauri build`. This runs vite build automatically (via `beforeBuildCommand`), then compiles the Rust binary and produces AppImage/deb/rpm bundles. **NEVER use `cargo build` directly** — it compiles the Rust binary but does not embed the latest frontend assets.
 
-Features must be working when the user tests them. Do not rely on native browser/webview behavior for styling — Tauri uses Windows WebView2 which does not respect CSS on native form elements like `<select>`/`<option>`. Use custom components with styled divs/buttons instead. When unsure if something will render correctly, prefer fully controlled custom components over native elements.
+Features must be working when the user tests them. Do not rely on native browser/webview behavior for styling — Tauri's WebView may not respect CSS on native form elements like `<select>`/`<option>`. Use custom components with styled divs/buttons instead. When unsure if something will render correctly, prefer fully controlled custom components over native elements.
 
 ## Testing
 
