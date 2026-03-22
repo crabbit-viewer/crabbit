@@ -22,6 +22,8 @@ export function useKeyboard(
 
       switch (e.key) {
         case "ArrowRight":
+        case "d":
+        case "D":
           if (
             currentPost?.media_type === "gallery" &&
             state.galleryIndex < currentPost.media.length - 1
@@ -32,6 +34,8 @@ export function useKeyboard(
           }
           break;
         case "ArrowLeft":
+        case "a":
+        case "A":
           if (
             currentPost?.media_type === "gallery" &&
             state.galleryIndex > 0
@@ -40,6 +44,18 @@ export function useKeyboard(
           } else {
             prev();
           }
+          break;
+        case "ArrowUp":
+        case "w":
+        case "W":
+          e.preventDefault();
+          dispatch({ type: "SET_VOLUME", payload: state.volume + 10 });
+          break;
+        case "ArrowDown":
+        case "s":
+        case "S":
+          e.preventDefault();
+          dispatch({ type: "SET_VOLUME", payload: state.volume - 10 });
           break;
         case " ":
           e.preventDefault();
@@ -68,7 +84,7 @@ export function useKeyboard(
           break;
       }
     },
-    [next, prev, togglePlay, dispatch, currentPost, state.galleryIndex]
+    [next, prev, togglePlay, dispatch, currentPost, state.galleryIndex, state.volume]
   );
 
   useEffect(() => {

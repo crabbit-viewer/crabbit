@@ -1,4 +1,5 @@
 import { useEffect, useContext, useCallback, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { AppStateContext, AppDispatchContext } from "../state/context";
 import { useReddit } from "./useReddit";
 
@@ -52,13 +53,19 @@ export function useSlideshow() {
     }
   }, [state.currentIndex, state.posts.length, state.after, state.isLoading, fetchPosts]);
 
-  // Preload next images
+  // Preload next media
   useEffect(() => {
     for (let i = 1; i <= 3; i++) {
       const post = state.posts[state.currentIndex + i];
-      if (post && post.media_type === "image" && post.media[0]) {
+      if (!post) continue;
+      if (post.media_type === "image" && post.media[0]) {
         const img = new Image();
         img.src = post.media[0].url;
+      } else if ((post.media_type === "video" || post.media_type === "animated_gif") && post.media[0]) {
+        invoke("preload_video", { url: post.media[0].url }).catch(() => {});
+        if (post.audio_url) {
+          invoke("preload_video", { url: post.audio_url }).catch(() => {});
+        }
       }
     }
   }, [state.currentIndex, state.posts]);

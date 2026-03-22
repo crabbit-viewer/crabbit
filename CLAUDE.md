@@ -62,6 +62,12 @@ Tauri commands: `fetch_posts`, `get_favorites`, `add_favorite`, `remove_favorite
 
 Arrow keys (nav/gallery), Space (play/pause), T (overlay), F (fullscreen), M (mute), Escape (exit fullscreen)
 
+## Workflow
+
+Always rebuild at the end of any code changes: `./npx.sh vite build && ./npx.sh tauri build --no-bundle`. The first step builds the frontend into `dist/`, the second embeds it into the Rust binary producing `src-tauri/target/release/crabbit.exe`. Both steps are required — there is no `beforeBuildCommand` in tauri.conf.json so `tauri build` does NOT auto-run vite. **NEVER use `cargo.exe build` directly** — it compiles the Rust binary but does not embed the latest frontend assets. Always use `./npx.sh tauri build --no-bundle` for the Rust step.
+
+Features must be working when the user tests them. Do not rely on native browser/webview behavior for styling — Tauri uses Windows WebView2 which does not respect CSS on native form elements like `<select>`/`<option>`. Use custom components with styled divs/buttons instead. When unsure if something will render correctly, prefer fully controlled custom components over native elements.
+
 ## Testing
 
 Test subs: `r/earthporn` (images), `r/oddlysatisfying` (v.redd.it video), `r/houseplants` (galleries), `r/earthporn+spaceporn` (multi). Check YouTube/redgifs embeds load in iframes. Verify CSP doesn't block media domains.
