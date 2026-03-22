@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.crabbit.viewer",
   "build": {
+    "beforeBuildCommand": "bun vite build",
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420"
   },
