@@ -25,18 +25,21 @@ function Dropdown({ value, options, onChange }: {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="bg-white/10 text-white text-sm rounded px-2 py-1 outline-none hover:bg-white/20"
+        className="text-white/50 hover:text-white text-xs px-1.5 py-0.5 rounded transition-colors"
       >
-        {label} ▾
+        {label}
+        <svg className="inline ml-0.5 w-3 h-3 opacity-50" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M4.5 6l3.5 4 3.5-4z" />
+        </svg>
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded shadow-lg min-w-[120px] z-20">
+        <div className="absolute left-0 top-full mt-1 bg-black/90 backdrop-blur-sm border border-white/10 rounded-lg shadow-2xl min-w-[110px] z-20 py-1">
           {options.map((opt) => (
             <button
               key={opt.value}
               onClick={() => { onChange(opt.value); setOpen(false); }}
-              className={`block w-full text-left px-3 py-1.5 text-sm ${
-                opt.value === value ? "text-white bg-white/10" : "text-white/80 hover:bg-white/10"
+              className={`block w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                opt.value === value ? "text-blue-400" : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
             >
               {opt.label}
@@ -67,7 +70,6 @@ function SettingsPopover() {
 
   const pickFolder = async () => {
     try {
-      // Use tauri dialog plugin
       const { open: openDialog } = await import("@tauri-apps/plugin-dialog");
       const selected = await openDialog({ directory: true, title: "Choose save folder" });
       if (selected) {
@@ -87,27 +89,29 @@ function SettingsPopover() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="text-white/60 hover:text-white text-sm px-1"
+        className="icon-btn"
         title="Settings"
       >
-        ⚙
+        <svg viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+        </svg>
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded shadow-lg p-3 z-20 min-w-[280px]">
-          <div className="text-white/60 text-xs mb-1">Save location</div>
-          <div className="text-white text-xs break-all mb-2">{savePath || "..."}</div>
+        <div className="absolute right-0 top-full mt-1 bg-black/90 backdrop-blur-sm border border-white/10 rounded-lg shadow-2xl p-3 z-20 min-w-[260px]">
+          <div className="text-white/40 text-[10px] uppercase tracking-wider mb-1.5">Save location</div>
+          <div className="text-white/70 text-xs break-all mb-3 leading-relaxed">{savePath || "..."}</div>
           <div className="flex gap-2">
             <button
               onClick={pickFolder}
-              className="bg-white/10 hover:bg-white/20 text-white text-xs px-2 py-1 rounded"
+              className="text-white/50 hover:text-white text-xs px-2.5 py-1 rounded border border-white/10 hover:border-white/20 transition-colors"
             >
               Change
             </button>
             <button
               onClick={openFolder}
-              className="bg-white/10 hover:bg-white/20 text-white text-xs px-2 py-1 rounded"
+              className="text-white/50 hover:text-white text-xs px-2.5 py-1 rounded border border-white/10 hover:border-white/20 transition-colors"
             >
-              Open Folder
+              Open
             </button>
           </div>
         </div>
@@ -116,7 +120,11 @@ function SettingsPopover() {
   );
 }
 
-export function SubredditBar() {
+interface SubredditBarProps {
+  uiVisible: boolean;
+}
+
+export function SubredditBar({ uiVisible }: SubredditBarProps) {
   const state = useContext(AppStateContext);
   const dispatch = useContext(AppDispatchContext);
   const { fetchPosts } = useReddit();
@@ -126,6 +134,7 @@ export function SubredditBar() {
   const [showFavs, setShowFavs] = useState(false);
 
   const isSavedMode = state.viewMode === "saved";
+  const chromeClass = `ui-chrome ui-top ${uiVisible ? "" : "ui-hidden"}`;
 
   useEffect(() => {
     invoke<string[]>("get_favorites").then(setFavorites).catch(() => {});
@@ -157,7 +166,6 @@ export function SubredditBar() {
     dispatch({ type: "SET_PLAYING", payload: false });
   };
 
-  // Re-fetch posts when sort or time range changes
   useEffect(() => {
     if (state.subreddit && state.posts.length > 0 && !isSavedMode) {
       fetchPosts();
@@ -166,14 +174,15 @@ export function SubredditBar() {
 
   if (isSavedMode) {
     return (
-      <div className="absolute top-0 left-0 right-0 h-12 bg-black/70 flex items-center px-4 gap-3 z-10">
-        <span className="text-orange-500 font-bold text-lg">crabbit</span>
-        <span className="text-green-400 text-sm font-medium">Saved Posts</span>
+      <div className={`absolute top-0 left-0 right-0 h-10 bg-black/40 flex items-center px-4 gap-3 z-10 ${chromeClass}`} data-ui-chrome>
+        <span className="text-white/30 font-medium text-sm tracking-tight">crabbit</span>
+        <div className="w-px h-4 bg-white/10" />
+        <span className="text-blue-400 text-xs">Saved</span>
         <button
           onClick={exitSavedView}
-          className="bg-white/10 hover:bg-white/20 text-white text-sm rounded px-3 py-1 ml-auto"
+          className="text-white/40 hover:text-white text-xs ml-auto transition-colors"
         >
-          Back to Browse
+          Back
         </button>
         <SettingsPopover />
       </div>
@@ -181,23 +190,26 @@ export function SubredditBar() {
   }
 
   return (
-    <div className="absolute top-0 left-0 right-0 h-12 bg-black/70 flex items-center px-4 gap-3 z-10">
-      <span className="text-orange-500 font-bold text-lg">crabbit</span>
+    <div className={`absolute top-0 left-0 right-0 h-10 bg-black/40 flex items-center px-4 gap-2 z-10 ${chromeClass}`} data-ui-chrome>
+      <span className="text-white/30 font-medium text-sm tracking-tight mr-1">crabbit</span>
 
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <span className="text-white/60">r/</span>
+      <form onSubmit={handleSubmit} className="flex items-center gap-0">
+        <span className="text-white/25 text-xs">r/</span>
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="subreddit"
-          className="bg-white/10 text-white px-2 py-1 rounded text-sm w-48 outline-none focus:ring-1 focus:ring-blue-500"
+          className="bg-transparent text-white/80 text-xs w-36 outline-none border-b border-white/10 focus:border-blue-500/50 px-1 py-0.5 transition-colors placeholder:text-white/20"
         />
         <button
           type="submit"
-          className="text-white/60 hover:text-white text-sm px-2"
+          className="icon-btn w-6 h-6"
+          title="Go"
         >
-          Go
+          <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+            <path d="M6.5 1a5.5 5.5 0 014.383 8.823l3.147 3.147a.75.75 0 01-1.06 1.06l-3.147-3.147A5.5 5.5 0 116.5 1zm0 1.5a4 4 0 100 8 4 4 0 000-8z" />
+          </svg>
         </button>
       </form>
 
@@ -228,32 +240,38 @@ export function SubredditBar() {
         />
       )}
 
-      {/* Saved + Favorites + Settings */}
-      <div className="relative ml-auto flex items-center gap-2">
+      <div className="relative ml-auto flex items-center gap-1">
+        {/* Saved posts */}
         <button
           onClick={loadSavedPosts}
-          className="text-green-400/70 hover:text-green-400 text-sm px-2"
+          className="icon-btn"
+          title="Saved posts"
         >
-          💾 Saved
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
+          </svg>
         </button>
+
+        {/* Favorites */}
         <button
           onClick={() => {
             setShowFavs(!showFavs);
-            invoke<string[]>("get_favorites")
-              .then(setFavorites)
-              .catch(() => {});
+            invoke<string[]>("get_favorites").then(setFavorites).catch(() => {});
           }}
-          className="text-white/60 hover:text-white text-sm px-2"
+          className="icon-btn"
+          title="Favorites"
         >
-          ★ Favorites
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+          </svg>
         </button>
         {showFavs && favorites.length > 0 && (
-          <div className="absolute right-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded shadow-lg min-w-[160px] z-20">
+          <div className="absolute right-0 top-full mt-1 bg-black/90 backdrop-blur-sm border border-white/10 rounded-lg shadow-2xl min-w-[140px] z-20 py-1">
             {favorites.map((fav) => (
               <button
                 key={fav}
                 onClick={() => loadFavorite(fav)}
-                className="block w-full text-left text-white/80 hover:bg-white/10 px-3 py-1.5 text-sm"
+                className="block w-full text-left text-white/50 hover:text-white hover:bg-white/5 px-3 py-1.5 text-xs transition-colors"
               >
                 r/{fav}
               </button>
