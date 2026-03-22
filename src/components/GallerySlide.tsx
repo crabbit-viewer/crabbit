@@ -26,7 +26,6 @@ export function GallerySlide({ items }: Props) {
           {item.caption}
         </p>
       )}
-      {/* Gallery dots */}
       <div className="absolute bottom-4 flex gap-1.5 items-center">
         {items.map((_, i) => (
           <button

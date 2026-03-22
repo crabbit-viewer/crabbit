@@ -59,7 +59,6 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, uiV
 
   return (
     <div className={`absolute bottom-0 left-0 right-0 h-10 bg-black/40 flex items-center px-3 gap-1 text-white ${chromeClass}`} data-ui-chrome>
-      {/* Playback controls */}
       <button onClick={onPrev} className="icon-btn" title="Previous (←)">
         <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3.5 3v10a.5.5 0 001 0V3a.5.5 0 00-1 0zm8.354.854a.5.5 0 00-.708-.708l-5 5a.5.5 0 000 .708l5 5a.5.5 0 00.708-.708L7.207 8l4.647-4.646z"/></svg>
       </button>
@@ -74,7 +73,6 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, uiV
         <svg viewBox="0 0 16 16" fill="currentColor"><path d="M12.5 3v10a.5.5 0 01-1 0V3a.5.5 0 011 0zM4.146 3.146a.5.5 0 01.708 0l5 5a.5.5 0 010 .708l-5 5a.5.5 0 01-.708-.708L8.793 8 4.146 3.354a.5.5 0 010-.708z"/></svg>
       </button>
 
-      {/* Speed */}
       <button
         onClick={cycleSpeed}
         className="text-white/30 hover:text-white/60 text-[10px] ml-1 tabular-nums transition-colors"
@@ -83,14 +81,12 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, uiV
         {state.timerSpeed / 1000}s
       </button>
 
-      {/* Counter */}
       <span className="text-white/20 text-[10px] ml-auto tabular-nums select-none">
         {state.posts.length > 0
           ? `${state.currentIndex + 1}/${state.posts.length}`
           : ""}
       </span>
 
-      {/* Volume */}
       <button
         onClick={() => dispatch({ type: "TOGGLE_MUTE" })}
         className={`icon-btn ${state.isMuted ? "active" : ""}`}
@@ -103,7 +99,6 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, uiV
         )}
       </button>
 
-      {/* Save / Favorite / Delete */}
       {isSavedMode && onDelete ? (
         <button
           onClick={onDelete}

@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use log::{debug, error};
 use reddit::client::{build_client, fetch_listing, resolve_redgifs};
 use reddit::parser::parse_listing;
 use reddit::types::{FetchParams, FetchResult, MediaPost};
@@ -27,6 +28,22 @@ pub struct AppState {
 pub struct CachedVideo {
     bytes: Vec<u8>,
     content_type: String,
+}
+
+/// Decode a media-proxy URL back to the real URL, or return the original.
+pub fn decode_proxy_url(url: &str) -> String {
+    if let Some(encoded) = url.strip_prefix("http://media-proxy.localhost/") {
+        percent_decode_str(encoded).decode_utf8_lossy().to_string()
+    } else {
+        url.to_string()
+    }
+}
+
+/// Evict entries from the video cache when it exceeds the limit.
+fn ensure_cache_capacity(cache: &mut HashMap<String, CachedVideo>) {
+    if cache.len() >= 10 {
+        cache.clear();
+    }
 }
 
 #[tauri::command]
@@ -90,11 +107,7 @@ async fn preload_video(
     state: tauri::State<'_, AppState>,
     url: String,
 ) -> Result<(), String> {
-    let real_url = if let Some(encoded) = url.strip_prefix("http://media-proxy.localhost/") {
-        percent_decode_str(encoded).decode_utf8_lossy().to_string()
-    } else {
-        url.clone()
-    };
+    let real_url = decode_proxy_url(&url);
 
     {
         let cache = state.video_cache.lock().map_err(|e| e.to_string())?;
@@ -103,7 +116,7 @@ async fn preload_video(
         }
     }
 
-    eprintln!("[preload] Downloading: {}", real_url);
+    debug!("[preload] Downloading: {}", real_url);
     let resp = state.client.get(&real_url).send().await.map_err(|e| e.to_string())?;
     let content_type = resp
         .headers()
@@ -112,22 +125,13 @@ async fn preload_video(
         .unwrap_or("video/mp4")
         .to_string();
     let bytes = resp.bytes().await.map_err(|e| e.to_string())?.to_vec();
-    eprintln!("[preload] Cached {} bytes for: {}", bytes.len(), real_url);
+    debug!("[preload] Cached {} bytes for: {}", bytes.len(), real_url);
 
     let mut cache = state.video_cache.lock().map_err(|e| e.to_string())?;
-    if cache.len() >= 10 {
-        cache.clear();
-    }
+    ensure_cache_capacity(&mut cache);
     cache.insert(real_url, CachedVideo { bytes, content_type });
     Ok(())
 }
-
-#[tauri::command]
-fn log_frontend(level: String, msg: String) {
-    eprintln!("[frontend][{}] {}", level, msg);
-}
-
-// --- Saved posts commands ---
 
 #[tauri::command]
 async fn save_post(
@@ -188,12 +192,10 @@ async fn set_save_path(
     let mut save_path = state.save_path.lock().map_err(|e| e.to_string())?;
     *save_path = new_path;
 
-    // Update config
     let mut cfg = config::read_config(&state.config_path);
     cfg.save_path = Some(path);
     config::write_config(&state.config_path, &cfg)?;
 
-    // Reload saved IDs from new path
     let new_ids = saved::load_saved_ids(&save_path);
     let mut ids = state.saved_ids.lock().map_err(|e| e.to_string())?;
     *ids = new_ids;
@@ -271,7 +273,7 @@ pub fn run() {
                     .or_else(|| uri.strip_prefix("media-proxy://localhost/"))
                     .unwrap_or("");
                 let video_url = percent_decode_str(encoded_url).decode_utf8_lossy().to_string();
-                eprintln!("[media-proxy] Request: {} -> {} (range: {:?})", uri, video_url, range_header);
+                debug!("[media-proxy] Request: {} -> {} (range: {:?})", uri, video_url, range_header);
 
                 if video_url.is_empty() {
                     responder.respond(
@@ -285,11 +287,10 @@ pub fn run() {
 
                 let state = app_handle.state::<AppState>();
 
-                // Check video cache first
                 {
                     let cache = state.video_cache.lock().unwrap();
                     if let Some(cached) = cache.get(&video_url) {
-                        eprintln!("[media-proxy] Serving from cache: {} ({} bytes)", video_url, cached.bytes.len());
+                        debug!("[media-proxy] Serving from cache: {} ({} bytes)", video_url, cached.bytes.len());
                         responder.respond(serve_bytes(&cached.bytes, &cached.content_type, &range_header));
                         return;
                     }
@@ -304,24 +305,22 @@ pub fn run() {
                             .unwrap_or("video/mp4")
                             .to_string();
                         let content_length = resp.content_length().unwrap_or(0);
-                        eprintln!("[media-proxy] Response: {} bytes content-type={}", content_length, content_type);
+                        debug!("[media-proxy] Response: {} bytes content-type={}", content_length, content_type);
                         match resp.bytes().await {
                             Ok(bytes) => {
-                                eprintln!("[media-proxy] Serving {} bytes", bytes.len());
+                                debug!("[media-proxy] Serving {} bytes", bytes.len());
                                 let bytes_vec = bytes.to_vec();
                                 let response = serve_bytes(&bytes_vec, &content_type, &range_header);
 
                                 if let Ok(mut cache) = state.video_cache.lock() {
-                                    if cache.len() >= 10 {
-                                        cache.clear();
-                                    }
+                                    ensure_cache_capacity(&mut cache);
                                     cache.insert(video_url, CachedVideo { bytes: bytes_vec, content_type });
                                 }
 
                                 responder.respond(response);
                             }
                             Err(e) => {
-                                eprintln!("[media-proxy] Body read error: {}", e);
+                                error!("[media-proxy] Body read error: {}", e);
                                 responder.respond(
                                     HttpResponse::builder()
                                         .status(StatusCode::BAD_GATEWAY)
@@ -332,7 +331,7 @@ pub fn run() {
                         }
                     }
                     Err(e) => {
-                        eprintln!("[media-proxy] Fetch error: {}", e);
+                        error!("[media-proxy] Fetch error: {}", e);
                         responder.respond(
                             HttpResponse::builder()
                                 .status(StatusCode::BAD_GATEWAY)
@@ -348,14 +347,13 @@ pub fn run() {
             let range_header = request.headers().get("range").and_then(|v| v.to_str().ok()).map(|s| s.to_string());
             tauri::async_runtime::spawn(async move {
                 let uri = request.uri().to_string();
-                // URL format: http://saved-media.localhost/{subreddit}/{filename}
                 let path_part = uri
                     .strip_prefix("http://saved-media.localhost/")
                     .or_else(|| uri.strip_prefix("https://saved-media.localhost/"))
                     .or_else(|| uri.strip_prefix("saved-media://localhost/"))
                     .unwrap_or("");
                 let decoded_path = percent_decode_str(path_part).decode_utf8_lossy().to_string();
-                eprintln!("[saved-media] Request: {} -> {}", uri, decoded_path);
+                debug!("[saved-media] Request: {} -> {}", uri, decoded_path);
 
                 if decoded_path.is_empty() {
                     responder.respond(
@@ -371,7 +369,6 @@ pub fn run() {
                 let save_path = state.save_path.lock().unwrap().clone();
                 let file_path = save_path.join(&decoded_path);
 
-                // Security: ensure file_path is within save_path
                 match file_path.canonicalize() {
                     Ok(canonical) => {
                         if let Ok(save_canonical) = save_path.canonicalize() {
@@ -415,7 +412,7 @@ pub fn run() {
                         responder.respond(serve_bytes(&bytes, content_type, &range_header));
                     }
                     Err(e) => {
-                        eprintln!("[saved-media] Read error: {}", e);
+                        error!("[saved-media] Read error: {}", e);
                         responder.respond(
                             HttpResponse::builder()
                                 .status(StatusCode::NOT_FOUND)
@@ -466,7 +463,6 @@ pub fn run() {
             add_favorite,
             remove_favorite,
             preload_video,
-            log_frontend,
             save_post,
             get_saved_posts,
             delete_saved_post,

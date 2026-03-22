@@ -1,4 +1,6 @@
 export type MediaType = "image" | "video" | "animated_gif" | "gallery" | "embed";
+export type SortOption = "hot" | "new" | "top" | "rising" | "controversial";
+export type TimeRange = "hour" | "day" | "week" | "month" | "year" | "all";
 
 export interface MediaItem {
   url: string;

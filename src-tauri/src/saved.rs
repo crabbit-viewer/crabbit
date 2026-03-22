@@ -1,5 +1,7 @@
+use crate::decode_proxy_url;
 use crate::reddit::types::{MediaPost, MediaType};
 use chrono::Utc;
+use log::debug;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -66,13 +68,21 @@ pub async fn save_post(
             fs::create_dir_all(&gallery_dir)
                 .map_err(|e| format!("Failed to create gallery dir: {}", e))?;
 
-            for (i, item) in post.media.iter().enumerate() {
-                let real_url = extract_real_url(&item.url);
-                let ext = extension_from_url(&real_url);
+            let download_tasks: Vec<_> = post.media.iter().enumerate().map(|(i, item)| {
+                let real_url = decode_proxy_url(&item.url);
+                let ext = extension_from_url(&real_url).to_string();
                 let filename = format!("{}.{}", i, ext);
                 let file_path = gallery_dir.join(&filename);
-                download_file(client, &real_url, &file_path).await?;
-                files.push(format!("{}/{}", base, filename));
+                let rel_path = format!("{}/{}", base, filename);
+                async move {
+                    download_file(client, &real_url, &file_path).await?;
+                    Ok::<String, String>(rel_path)
+                }
+            }).collect();
+
+            let results = futures::future::join_all(download_tasks).await;
+            for result in results {
+                files.push(result?);
             }
         }
         MediaType::Embed => {
@@ -80,7 +90,7 @@ pub async fn save_post(
         }
         _ => {
             if let Some(item) = post.media.first() {
-                let real_url = extract_real_url(&item.url);
+                let real_url = decode_proxy_url(&item.url);
                 let ext = extension_from_url(&real_url);
                 let filename = format!("{}.{}", base, ext);
                 let file_path = sub_dir.join(&filename);
@@ -92,7 +102,7 @@ pub async fn save_post(
 
     // Download audio if present
     if let Some(ref audio_url) = post.audio_url {
-        let real_audio = extract_real_url(audio_url);
+        let real_audio = decode_proxy_url(audio_url);
         let audio_name = format!("{}_audio.mp4", base);
         let audio_path = sub_dir.join(&audio_name);
         download_file(client, &real_audio, &audio_path).await?;
@@ -122,22 +132,12 @@ pub async fn save_post(
     Ok(meta)
 }
 
-fn extract_real_url(url: &str) -> String {
-    if let Some(encoded) = url.strip_prefix("http://media-proxy.localhost/") {
-        percent_encoding::percent_decode_str(encoded)
-            .decode_utf8_lossy()
-            .to_string()
-    } else {
-        url.to_string()
-    }
-}
-
 async fn download_file(
     client: &reqwest::Client,
     url: &str,
     path: &Path,
 ) -> Result<(), String> {
-    eprintln!("[save] Downloading: {} -> {:?}", url, path);
+    debug!("[save] Downloading: {} -> {:?}", url, path);
     let resp = client
         .get(url)
         .send()
@@ -154,7 +154,7 @@ async fn download_file(
         .map_err(|e| format!("Failed to read body: {}", e))?;
 
     fs::write(path, &bytes).map_err(|e| format!("Failed to write file: {}", e))?;
-    eprintln!("[save] Saved {} bytes to {:?}", bytes.len(), path);
+    debug!("[save] Saved {} bytes to {:?}", bytes.len(), path);
     Ok(())
 }
 

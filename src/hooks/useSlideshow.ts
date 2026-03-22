@@ -53,10 +53,13 @@ export function useSlideshow() {
     }
   }, [state.currentIndex, state.posts.length, state.after, state.isLoading, fetchPosts]);
 
-  // Preload next media
+  const postsRef = useRef(state.posts);
+  postsRef.current = state.posts;
+
   useEffect(() => {
+    const posts = postsRef.current;
     for (let i = 1; i <= 3; i++) {
-      const post = state.posts[state.currentIndex + i];
+      const post = posts[state.currentIndex + i];
       if (!post) continue;
       if (post.media_type === "image" && post.media[0]) {
         const img = new Image();
@@ -68,7 +71,7 @@ export function useSlideshow() {
         }
       }
     }
-  }, [state.currentIndex, state.posts]);
+  }, [state.currentIndex]);
 
   const next = useCallback(() => {
     dispatch({ type: "NEXT_SLIDE" });

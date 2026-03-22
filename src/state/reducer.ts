@@ -1,4 +1,4 @@
-import { MediaPost } from "../types";
+import { MediaPost, SortOption, TimeRange } from "../types";
 
 export interface Notification {
   message: string;
@@ -22,8 +22,8 @@ export interface AppState {
   timerSpeed: number;
   showOverlay: boolean;
   subreddit: string;
-  sort: string;
-  timeRange: string;
+  sort: SortOption;
+  timeRange: TimeRange;
   galleryIndex: number;
   isMuted: boolean;
   volume: number;
@@ -67,8 +67,8 @@ export type AppAction =
   | { type: "SET_SPEED"; payload: number }
   | { type: "TOGGLE_OVERLAY" }
   | { type: "SET_SUBREDDIT"; payload: string }
-  | { type: "SET_SORT"; payload: string }
-  | { type: "SET_TIME_RANGE"; payload: string }
+  | { type: "SET_SORT"; payload: SortOption }
+  | { type: "SET_TIME_RANGE"; payload: TimeRange }
   | { type: "SET_GALLERY_INDEX"; payload: number }
   | { type: "NEXT_GALLERY" }
   | { type: "PREV_GALLERY" }
