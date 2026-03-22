@@ -7,7 +7,7 @@ export function EmbedSlide({ embedUrl }: Props) {
     <div className="flex items-center justify-center w-full h-full">
       <iframe
         src={embedUrl}
-        className="w-full max-w-4xl aspect-video"
+        className="w-full h-full"
         allowFullScreen
         allow="autoplay; encrypted-media"
         referrerPolicy="no-referrer"

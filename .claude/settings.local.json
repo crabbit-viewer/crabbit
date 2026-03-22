@@ -10,7 +10,8 @@
       "Bash(/tmp/npm.sh init:*)",
       "Bash(./npx.sh tsc:*)",
       "Bash(./npx.sh vite:*)",
-      "Bash(./npx.sh tauri:*)"
+      "Bash(./npx.sh tauri:*)",
+      "Bash(xargs cat:*)"
     ]
   }
 }

@@ -18,7 +18,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' https://i.redd.it https://preview.redd.it https://i.imgur.com https://external-preview.redd.it https://b.thumbs.redditmedia.com data: blob:; media-src 'self' https://v.redd.it https://i.imgur.com blob:; frame-src https://www.youtube.com https://youtube.com https://redgifs.com https://www.redgifs.com https://twitter.com https://platform.twitter.com; connect-src ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; img-src 'self' https://i.redd.it https://preview.redd.it https://i.imgur.com https://external-preview.redd.it https://b.thumbs.redditmedia.com data: blob:; media-src 'self' https://v.redd.it https://i.imgur.com http://media-proxy.localhost blob:; frame-src https://www.youtube.com https://youtube.com https://redgifs.com https://www.redgifs.com https://twitter.com https://platform.twitter.com; connect-src ipc: http://ipc.localhost http://media-proxy.localhost; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {
