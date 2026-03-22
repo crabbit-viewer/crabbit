@@ -3,15 +3,17 @@ import { AppStateContext } from "../state/context";
 import { MediaDisplay } from "./MediaDisplay";
 import { PostOverlay } from "./PostOverlay";
 import { ControlBar } from "./ControlBar";
+import { SubredditBar } from "./SubredditBar";
 import { useSavedPosts } from "../hooks/useSavedPosts";
 
 interface Props {
   onNext: () => void;
   onPrev: () => void;
   onTogglePlay: () => void;
+  uiVisible: boolean;
 }
 
-export function SlideshowView({ onNext, onPrev, onTogglePlay }: Props) {
+export function SlideshowView({ onNext, onPrev, onTogglePlay, uiVisible }: Props) {
   const state = useContext(AppStateContext);
   const { saveCurrentPost, deleteCurrentPost } = useSavedPosts();
   const currentPost = state.posts[state.currentIndex];
@@ -21,22 +23,27 @@ export function SlideshowView({ onNext, onPrev, onTogglePlay }: Props) {
       ? "No saved posts yet"
       : "Enter a subreddit to start browsing";
     return (
-      <div className="flex items-center justify-center w-full h-full text-white/40 text-lg">
-        {message}
-      </div>
+      <>
+        <SubredditBar uiVisible={true} />
+        <div className="flex items-center justify-center w-full h-full text-white/30 text-base tracking-wide">
+          {message}
+        </div>
+      </>
     );
   }
 
   return (
     <div className="relative w-full h-full">
       <MediaDisplay post={currentPost} />
-      <PostOverlay post={currentPost} visible={state.showOverlay} />
+      <SubredditBar uiVisible={uiVisible} />
+      <PostOverlay post={currentPost} visible={state.showOverlay} uiVisible={uiVisible} />
       <ControlBar
         onNext={onNext}
         onPrev={onPrev}
         onTogglePlay={onTogglePlay}
         onSave={saveCurrentPost}
         onDelete={state.viewMode === "saved" ? deleteCurrentPost : undefined}
+        uiVisible={uiVisible}
       />
     </div>
   );

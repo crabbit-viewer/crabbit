@@ -9,6 +9,7 @@ body {
   padding: 0;
   background: black;
   overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 }
 
 @keyframes fade-in {
@@ -18,4 +19,61 @@ body {
 
 .animate-fade-in {
   animation: fade-in 0.2s ease-out;
+}
+
+/* UI auto-hide transitions */
+.ui-chrome {
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.ui-chrome.ui-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ui-top.ui-hidden {
+  transform: translateY(-100%);
+}
+
+.ui-bottom.ui-hidden {
+  transform: translateY(100%);
+}
+
+/* Subtle scrollbar for dropdowns */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 2px;
+}
+
+/* Icon button base */
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  color: rgba(255,255,255,0.6);
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.icon-btn:hover {
+  color: rgba(255,255,255,1);
+  background: rgba(255,255,255,0.08);
+}
+
+.icon-btn.active {
+  color: #3b82f6;
+}
+
+.icon-btn svg {
+  width: 16px;
+  height: 16px;
 }
