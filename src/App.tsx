@@ -5,12 +5,15 @@ import { SubredditBar } from "./components/SubredditBar";
 import { SlideshowView } from "./components/SlideshowView";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { ErrorDisplay } from "./components/ErrorDisplay";
+import { Notification } from "./components/Notification";
 import { useSlideshow } from "./hooks/useSlideshow";
 import { useKeyboard } from "./hooks/useKeyboard";
+import { useSavedPosts } from "./hooks/useSavedPosts";
 
 function SlideshowContainer() {
   const { next, prev, togglePlay } = useSlideshow();
-  useKeyboard(next, prev, togglePlay);
+  const { saveCurrentPost } = useSavedPosts();
+  useKeyboard(next, prev, togglePlay, saveCurrentPost);
 
   return (
     <SlideshowView
@@ -34,6 +37,7 @@ export default function App() {
           </div>
           {state.isLoading && <LoadingSpinner />}
           {state.error && <ErrorDisplay message={state.error} />}
+          <Notification />
         </div>
       </AppDispatchContext.Provider>
     </AppStateContext.Provider>

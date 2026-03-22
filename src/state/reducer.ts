@@ -1,5 +1,17 @@
 import { MediaPost } from "../types";
 
+export interface Notification {
+  message: string;
+  type: "success" | "error";
+}
+
+export interface PreviousView {
+  posts: MediaPost[];
+  currentIndex: number;
+  after: string | null;
+  subreddit: string;
+}
+
 export interface AppState {
   posts: MediaPost[];
   currentIndex: number;
@@ -15,6 +27,10 @@ export interface AppState {
   galleryIndex: number;
   isMuted: boolean;
   volume: number;
+  viewMode: "slideshow" | "saved";
+  previousView: PreviousView | null;
+  notification: Notification | null;
+  currentPostSaved: boolean;
 }
 
 export const initialState: AppState = {
@@ -32,6 +48,10 @@ export const initialState: AppState = {
   galleryIndex: 0,
   isMuted: false,
   volume: 100,
+  viewMode: "slideshow",
+  previousView: null,
+  notification: null,
+  currentPostSaved: false,
 };
 
 export type AppAction =
@@ -53,7 +73,12 @@ export type AppAction =
   | { type: "NEXT_GALLERY" }
   | { type: "PREV_GALLERY" }
   | { type: "TOGGLE_MUTE" }
-  | { type: "SET_VOLUME"; payload: number };
+  | { type: "SET_VOLUME"; payload: number }
+  | { type: "SET_VIEW_MODE"; payload: "slideshow" | "saved" }
+  | { type: "SET_NOTIFICATION"; payload: Notification | null }
+  | { type: "SET_CURRENT_POST_SAVED"; payload: boolean }
+  | { type: "ENTER_SAVED_VIEW"; payload: { posts: MediaPost[] } }
+  | { type: "EXIT_SAVED_VIEW" };
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -114,6 +139,43 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, isMuted: !state.isMuted };
     case "SET_VOLUME":
       return { ...state, volume: Math.max(0, Math.min(100, action.payload)) };
+    case "SET_VIEW_MODE":
+      return { ...state, viewMode: action.payload };
+    case "SET_NOTIFICATION":
+      return { ...state, notification: action.payload };
+    case "SET_CURRENT_POST_SAVED":
+      return { ...state, currentPostSaved: action.payload };
+    case "ENTER_SAVED_VIEW":
+      return {
+        ...state,
+        previousView: {
+          posts: state.posts,
+          currentIndex: state.currentIndex,
+          after: state.after,
+          subreddit: state.subreddit,
+        },
+        posts: action.payload.posts,
+        currentIndex: 0,
+        galleryIndex: 0,
+        after: null,
+        viewMode: "saved",
+        isPlaying: false,
+      };
+    case "EXIT_SAVED_VIEW": {
+      if (!state.previousView) {
+        return { ...state, viewMode: "slideshow" };
+      }
+      return {
+        ...state,
+        posts: state.previousView.posts,
+        currentIndex: state.previousView.currentIndex,
+        after: state.previousView.after,
+        subreddit: state.previousView.subreddit,
+        previousView: null,
+        viewMode: "slideshow",
+        galleryIndex: 0,
+      };
+    }
     default:
       return state;
   }

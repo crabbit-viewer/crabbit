@@ -6,17 +6,22 @@ interface Props {
   onNext: () => void;
   onPrev: () => void;
   onTogglePlay: () => void;
+  onSave: () => void;
+  onDelete?: () => void;
 }
 
-export function ControlBar({ onNext, onPrev, onTogglePlay }: Props) {
+export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete }: Props) {
   const state = useContext(AppStateContext);
   const dispatch = useContext(AppDispatchContext);
   const [isFavorite, setIsFavorite] = useState(false);
 
   const currentPost = state.posts[state.currentIndex];
+  const isSavedMode = state.viewMode === "saved";
+  const isEmbed = currentPost?.media_type === "embed";
 
   useEffect(() => {
     if (!currentPost) return;
+    if (isSavedMode) return;
     invoke<string[]>("get_favorites").then((favs) => {
       setIsFavorite(
         favs.some(
@@ -24,7 +29,15 @@ export function ControlBar({ onNext, onPrev, onTogglePlay }: Props) {
         )
       );
     });
-  }, [currentPost?.subreddit]);
+  }, [currentPost?.subreddit, isSavedMode]);
+
+  // Check saved status when slide changes
+  useEffect(() => {
+    if (!currentPost || isSavedMode) return;
+    invoke<boolean>("is_post_saved", { postId: currentPost.id })
+      .then((saved) => dispatch({ type: "SET_CURRENT_POST_SAVED", payload: saved }))
+      .catch(() => {});
+  }, [currentPost?.id, isSavedMode, dispatch]);
 
   const toggleFavorite = useCallback(async () => {
     if (!currentPost) return;
@@ -80,13 +93,35 @@ export function ControlBar({ onNext, onPrev, onTogglePlay }: Props) {
       </button>
       <span className="text-white/50 text-xs w-8">{state.volume}%</span>
 
-      <button
-        onClick={toggleFavorite}
-        className={`hover:text-yellow-400 ${isFavorite ? "text-yellow-400" : ""}`}
-        title="Favorite subreddit"
-      >
-        {isFavorite ? "★" : "☆"}
-      </button>
+      {isSavedMode && onDelete ? (
+        <button
+          onClick={onDelete}
+          className="hover:text-red-400 text-red-300"
+          title="Delete saved post"
+        >
+          🗑
+        </button>
+      ) : (
+        <>
+          <button
+            onClick={onSave}
+            className={`hover:text-green-400 ${
+              state.currentPostSaved ? "text-green-400" : ""
+            } ${isEmbed ? "opacity-30 cursor-not-allowed" : ""}`}
+            title={isEmbed ? "Embeds cannot be saved" : "Save post (F)"}
+            disabled={isEmbed}
+          >
+            {state.currentPostSaved ? "💾" : "⬇"}
+          </button>
+          <button
+            onClick={toggleFavorite}
+            className={`hover:text-yellow-400 ${isFavorite ? "text-yellow-400" : ""}`}
+            title="Favorite subreddit"
+          >
+            {isFavorite ? "★" : "☆"}
+          </button>
+        </>
+      )}
     </div>
   );
 }
