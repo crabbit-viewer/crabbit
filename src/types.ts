@@ -27,6 +27,20 @@ export interface FetchResult {
   after: string | null;
 }
 
+export interface SavedPostMeta {
+  id: string;
+  title: string;
+  author: string;
+  subreddit: string;
+  score: number;
+  num_comments: number;
+  permalink: string;
+  media_type: MediaType;
+  saved_at: string;
+  files: string[];
+  audio_file: string | null;
+}
+
 export interface FetchParams {
   subreddit: string;
   sort?: string;
