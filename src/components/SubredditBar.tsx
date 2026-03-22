@@ -1,8 +1,10 @@
-import { useState, useContext, useEffect, useRef, FormEvent } from "react";
+import { useState, useContext, useEffect, useRef, useCallback, FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { AppStateContext, AppDispatchContext } from "../state/context";
+import { SortOption, TimeRange } from "../types";
 import { useReddit } from "../hooks/useReddit";
 import { useSavedPosts } from "../hooks/useSavedPosts";
+import { useClickOutside } from "../hooks/useClickOutside";
 
 function Dropdown({ value, options, onChange }: {
   value: string;
@@ -13,13 +15,7 @@ function Dropdown({ value, options, onChange }: {
   const ref = useRef<HTMLDivElement>(null);
   const label = options.find((o) => o.value === value)?.label ?? value;
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  useClickOutside(ref, useCallback(() => setOpen(false), []));
 
   return (
     <div className="relative" ref={ref}>
@@ -57,16 +53,12 @@ function SettingsPopover() {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    invoke<string>("get_save_path").then(setSavePath).catch(() => {});
+    if (open) {
+      invoke<string>("get_save_path").then(setSavePath).catch(() => {});
+    }
   }, [open]);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  useClickOutside(ref, useCallback(() => setOpen(false), []));
 
   const pickFolder = async () => {
     try {
@@ -157,12 +149,12 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
   };
 
   const handleSortChange = (sort: string) => {
-    dispatch({ type: "SET_SORT", payload: sort });
+    dispatch({ type: "SET_SORT", payload: sort as SortOption });
     dispatch({ type: "SET_PLAYING", payload: false });
   };
 
   const handleTimeChange = (time: string) => {
-    dispatch({ type: "SET_TIME_RANGE", payload: time });
+    dispatch({ type: "SET_TIME_RANGE", payload: time as TimeRange });
     dispatch({ type: "SET_PLAYING", payload: false });
   };
 
@@ -241,7 +233,6 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
       )}
 
       <div className="relative ml-auto flex items-center gap-1">
-        {/* Saved posts */}
         <button
           onClick={loadSavedPosts}
           className="icon-btn"
@@ -252,7 +243,6 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
           </svg>
         </button>
 
-        {/* Favorites */}
         <button
           onClick={() => {
             setShowFavs(!showFavs);

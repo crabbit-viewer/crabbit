@@ -1,5 +1,4 @@
 import { useRef, useEffect, useContext, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { MediaItem } from "../types";
 import { AppStateContext } from "../state/context";
 
@@ -15,30 +14,19 @@ export function VideoSlide({ item, audioUrl, isGif }: Props) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
 
-  // Debug: log video URL and attach error handler
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    invoke("log_frontend", { level: "info", msg: `Loading video: ${item.url}` });
     setVideoError(null);
 
     const onError = () => {
       const e = video.error;
-      const msg = e ? `Code ${e.code}: ${e.message}` : "Unknown error";
-      invoke("log_frontend", { level: "error", msg: `Video error: ${msg} URL: ${item.url}` });
-      setVideoError(msg);
-    };
-    const onLoadedData = () => {
-      invoke("log_frontend", { level: "info", msg: `Video loaded OK: ${item.url}` });
+      setVideoError(e ? `Code ${e.code}: ${e.message}` : "Unknown error");
     };
 
     video.addEventListener("error", onError);
-    video.addEventListener("loadeddata", onLoadedData);
-    return () => {
-      video.removeEventListener("error", onError);
-      video.removeEventListener("loadeddata", onLoadedData);
-    };
+    return () => video.removeEventListener("error", onError);
   }, [item.url]);
 
   // Sync audio with video

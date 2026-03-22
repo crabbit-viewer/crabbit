@@ -1,3 +1,4 @@
+use log::{debug, error};
 use reqwest::Client;
 use serde_json::Value;
 
@@ -47,59 +48,49 @@ pub async fn fetch_listing(
         .map_err(|e| format!("Failed to parse JSON: {}", e))
 }
 
-/// Get a temporary auth token from the RedGifs API.
 async fn redgifs_token(client: &Client) -> Result<String, String> {
-    eprintln!("[redgifs] Requesting auth token...");
+    debug!("[redgifs] Requesting auth token...");
     let resp: Value = client
         .get("https://api.redgifs.com/v2/auth/temporary")
         .send()
         .await
-        .map_err(|e| { eprintln!("[redgifs] Auth request failed: {}", e); format!("RedGifs auth failed: {}", e) })?
+        .map_err(|e| { error!("[redgifs] Auth request failed: {}", e); format!("RedGifs auth failed: {}", e) })?
         .json()
         .await
-        .map_err(|e| { eprintln!("[redgifs] Auth parse failed: {}", e); format!("RedGifs auth parse failed: {}", e) })?;
-    let token = resp["token"]
+        .map_err(|e| { error!("[redgifs] Auth parse failed: {}", e); format!("RedGifs auth parse failed: {}", e) })?;
+    resp["token"]
         .as_str()
         .map(String::from)
-        .ok_or_else(|| "No token in RedGifs auth response".to_string());
-    match &token {
-        Ok(_) => eprintln!("[redgifs] Got auth token OK"),
-        Err(e) => eprintln!("[redgifs] Auth token error: {}", e),
-    }
-    token
+        .ok_or_else(|| {
+            error!("[redgifs] No token in auth response");
+            "No token in RedGifs auth response".to_string()
+        })
 }
 
-/// Resolve a RedGifs slug to a direct HD video URL.
 async fn redgifs_video_url(client: &Client, token: &str, slug: &str) -> Result<String, String> {
     let url = format!("https://api.redgifs.com/v2/gifs/{}", slug);
-    eprintln!("[redgifs] Resolving slug '{}' ...", slug);
+    debug!("[redgifs] Resolving slug '{}'", slug);
     let resp: Value = client
         .get(&url)
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
-        .map_err(|e| { eprintln!("[redgifs] Fetch failed for '{}': {}", slug, e); format!("RedGifs fetch failed: {}", e) })?
+        .map_err(|e| { error!("[redgifs] Fetch failed for '{}': {}", slug, e); format!("RedGifs fetch failed: {}", e) })?
         .json()
         .await
-        .map_err(|e| { eprintln!("[redgifs] Parse failed for '{}': {}", slug, e); format!("RedGifs parse failed: {}", e) })?;
-    let video_url = resp["gif"]["urls"]["hd"]
+        .map_err(|e| { error!("[redgifs] Parse failed for '{}': {}", slug, e); format!("RedGifs parse failed: {}", e) })?;
+    resp["gif"]["urls"]["hd"]
         .as_str()
         .or_else(|| resp["gif"]["urls"]["sd"].as_str())
         .map(String::from)
         .ok_or_else(|| {
-            eprintln!("[redgifs] No video URL for '{}'. Response keys: {:?}", slug, resp["gif"]["urls"].as_object().map(|o| o.keys().collect::<Vec<_>>()));
+            error!("[redgifs] No video URL for '{}'", slug);
             "No video URL in RedGifs response".to_string()
-        });
-    match &video_url {
-        Ok(u) => eprintln!("[redgifs] Resolved '{}' -> {}", slug, u),
-        Err(e) => eprintln!("[redgifs] Failed '{}': {}", slug, e),
-    }
-    video_url
+        })
 }
 
 /// Resolve all RedGifs posts in a listing from embed placeholders to native videos.
 pub async fn resolve_redgifs(client: &Client, posts: &mut Vec<super::types::MediaPost>) {
-    // Collect indices of posts that need resolution
     let redgifs_indices: Vec<(usize, String)> = posts
         .iter()
         .enumerate()
@@ -112,16 +103,13 @@ pub async fn resolve_redgifs(client: &Client, posts: &mut Vec<super::types::Medi
         .collect();
 
     if redgifs_indices.is_empty() {
-        eprintln!("[redgifs] No RedGifs posts to resolve");
         return;
     }
-    eprintln!("[redgifs] Found {} RedGifs posts to resolve concurrently", redgifs_indices.len());
+    debug!("[redgifs] Found {} posts to resolve", redgifs_indices.len());
 
-    // Get auth token
     let token = match redgifs_token(client).await {
         Ok(t) => t,
         Err(_) => {
-            // Fall back to iframe embeds for all
             for (idx, slug) in &redgifs_indices {
                 posts[*idx].embed_url = Some(format!("https://www.redgifs.com/ifr/{}", slug));
             }
@@ -129,7 +117,6 @@ pub async fn resolve_redgifs(client: &Client, posts: &mut Vec<super::types::Medi
         }
     };
 
-    // Resolve all concurrently (API calls are small JSON, not video data)
     let futures: Vec<_> = redgifs_indices
         .iter()
         .map(|(_, slug)| redgifs_video_url(client, &token, slug))
@@ -154,7 +141,6 @@ pub async fn resolve_redgifs(client: &Client, posts: &mut Vec<super::types::Medi
                 post.embed_url = None;
             }
             Err(_) => {
-                // Fall back to iframe embed
                 posts[idx].embed_url = Some(format!("https://www.redgifs.com/ifr/{}", slug));
             }
         }
