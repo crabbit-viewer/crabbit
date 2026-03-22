@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:v2.tauri.app)",
+      "Bash(cargo.exe:*)",
+      "Bash(npm.cmd:*)",
+      "Bash(node.exe -e \"console.log\\(process.env.APPDATA\\)\")",
+      "Read(//mnt/c/Users/maikk/scoop/apps/nodejs/25.6.1/**)",
+      "Bash(node.exe:*)",
+      "Bash(/tmp/npm.sh init:*)",
+      "Bash(./npx.sh tsc:*)",
+      "Bash(./npx.sh vite:*)",
+      "Bash(./npx.sh tauri:*)"
+    ]
+  }
+}
