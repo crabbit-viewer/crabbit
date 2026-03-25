@@ -33,7 +33,7 @@ export interface AppState {
   currentPostSaved: boolean;
 }
 
-export const initialState: AppState = {
+const defaultState: AppState = {
   posts: [],
   currentIndex: 0,
   after: null,
@@ -53,6 +53,8 @@ export const initialState: AppState = {
   notification: null,
   currentPostSaved: false,
 };
+
+export const initialState: AppState = defaultState;
 
 export type AppAction =
   | { type: "SET_LOADING"; payload: boolean }

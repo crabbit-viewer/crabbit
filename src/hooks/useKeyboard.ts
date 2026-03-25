@@ -1,4 +1,5 @@
 import { useEffect, useContext, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { AppStateContext, AppDispatchContext } from "../state/context";
 
 export function useKeyboard(
@@ -86,6 +87,16 @@ export function useKeyboard(
           if (document.fullscreenElement) {
             document.exitFullscreen();
           }
+          break;
+        case "`":
+          invoke("dump_video_cache").then((paths) => {
+            console.log("[dump]", paths);
+            alert(`Dumped ${(paths as string[]).length} videos to /tmp`);
+          }).catch((e) => alert(`Dump failed: ${e}`));
+          break;
+        case "F12":
+          e.preventDefault();
+          invoke("toggle_devtools").catch(() => {});
           break;
       }
     },
