@@ -1,48 +1,154 @@
-import { useRef, useEffect, useContext, useState } from "react";
+import { useEffect, useContext, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { MediaItem } from "../types";
 import { AppStateContext } from "../state/context";
+import { isLinux } from "../platform";
 
 interface Props {
   item: MediaItem;
   audioUrl: string | null;
   isGif: boolean;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  audioRef: React.RefObject<HTMLAudioElement | null>;
 }
 
-export function VideoSlide({ item, audioUrl, isGif }: Props) {
+let cachedPort: number | null = null;
+
+async function getServerPort(): Promise<number> {
+  if (cachedPort !== null) return cachedPort;
+  cachedPort = await invoke<number>("get_video_server_port");
+  return cachedPort;
+}
+
+// ─── Linux: mpv-backed video ────────────────────────────────────────────────
+
+function MpvVideoSlide({ item, audioUrl, isGif }: Pick<Props, "item" | "audioUrl" | "isGif">) {
   const { isMuted, volume } = useContext(AppStateContext);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [videoError, setVideoError] = useState<string | null>(null);
-  const [videoSrc, setVideoSrc] = useState<string | null>(null);
-  const [audioSrc, setAudioSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load video into mpv
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        console.log("[mpv-slide] Starting load for:", item.url);
+        const port = await getServerPort();
+        // Preload video (downloads to Rust cache, returns cache key)
+        const videoKey: string = await invoke("preload_video", { url: item.url });
+        if (cancelled) { console.log("[mpv-slide] Cancelled after preload_video"); return; }
+        const videoUrl = `http://127.0.0.1:${port}/${videoKey}`;
+
+        // Preload audio if present (v.redd.it dual stream)
+        let audioUrlFull: string | null = null;
+        if (audioUrl) {
+          const audioKey: string = await invoke("preload_video", { url: audioUrl });
+          if (cancelled) { console.log("[mpv-slide] Cancelled after audio preload"); return; }
+          audioUrlFull = `http://127.0.0.1:${port}/${audioKey}`;
+        }
+
+        console.log("[mpv-slide] Calling mpv_load:", videoUrl);
+        // Tell mpv to play
+        await invoke("mpv_load", {
+          videoUrl,
+          audioUrl: audioUrlFull,
+          isGif,
+          muted: isMuted,
+          volume,
+        });
+        console.log("[mpv-slide] mpv_load succeeded");
+      } catch (e) {
+        console.error("[mpv-slide] Error:", e);
+        if (!cancelled) setError(`${e}`);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+
+    return () => {
+      console.log("[mpv-slide] Cleanup, setting cancelled=true");
+      cancelled = true;
+      invoke("mpv_stop").catch(() => {});
+    };
+  }, [item.url, audioUrl]);
+
+  // Sync mute state to mpv
+  useEffect(() => {
+    invoke("mpv_set_property", {
+      name: "mute",
+      value: isMuted || isGif ? "yes" : "no",
+    }).catch(() => {});
+  }, [isMuted, isGif]);
+
+  // Sync volume to mpv
+  useEffect(() => {
+    invoke("mpv_set_property", {
+      name: "volume",
+      value: String(volume),
+    }).catch(() => {});
+  }, [volume]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center w-full h-full">
+        <div className="text-white/50 text-sm">Loading video...</div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {error && (
+        <div className="absolute bottom-4 left-4 right-4 bg-red-900/80 text-white text-xs p-2 rounded font-mono break-all z-10">
+          mpv error: {error}
+          <br />
+          URL: {item.url}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── Non-Linux: HTML5 <video> backed ────────────────────────────────────────
+
+function Html5VideoSlide({ item, audioUrl, isGif, videoRef, audioRef }: Props) {
+  const { isMuted, volume } = useContext(AppStateContext);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    let videoBlobUrl: string | null = null;
-    let audioBlobUrl: string | null = null;
 
     async function load() {
       setLoading(true);
       setVideoError(null);
-      setVideoSrc(null);
-      setAudioSrc(null);
+      setReady(false);
 
       try {
-        const videoBytes: ArrayBuffer = await invoke("fetch_video_bytes", { url: item.url });
+        const port = await getServerPort();
+        const videoKey: string = await invoke("preload_video", { url: item.url });
         if (cancelled) return;
-        const videoBlob = new Blob([videoBytes], { type: "video/mp4" });
-        videoBlobUrl = URL.createObjectURL(videoBlob);
-        setVideoSrc(videoBlobUrl);
 
-        if (audioUrl) {
-          const audioBytes: ArrayBuffer = await invoke("fetch_video_bytes", { url: audioUrl });
-          if (cancelled) return;
-          const audioBlob = new Blob([audioBytes], { type: "audio/mp4" });
-          audioBlobUrl = URL.createObjectURL(audioBlob);
-          setAudioSrc(audioBlobUrl);
+        const video = videoRef.current;
+        if (video) {
+          video.src = `http://127.0.0.1:${port}/${videoKey}`;
+          video.load();
         }
+
+        if (audioUrl && audioRef.current) {
+          const audioKey: string = await invoke("preload_video", { url: audioUrl });
+          if (cancelled) return;
+          audioRef.current.src = `http://127.0.0.1:${port}/${audioKey}`;
+          audioRef.current.load();
+        }
+
+        setReady(true);
       } catch (e) {
         if (!cancelled) {
           setVideoError(`Fetch failed: ${e}`);
@@ -56,26 +162,13 @@ export function VideoSlide({ item, audioUrl, isGif }: Props) {
 
     return () => {
       cancelled = true;
-      const video = videoRef.current;
-      if (video) {
-        video.pause();
-        video.removeAttribute("src");
-        video.load();
-      }
-      const audio = audioRef.current;
-      if (audio) {
-        audio.pause();
-        audio.removeAttribute("src");
-        audio.load();
-      }
-      if (videoBlobUrl) URL.revokeObjectURL(videoBlobUrl);
-      if (audioBlobUrl) URL.revokeObjectURL(audioBlobUrl);
     };
   }, [item.url, audioUrl]);
 
+  // Video error handling
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !videoSrc) return;
+    if (!video || !ready) return;
 
     const onError = () => {
       const e = video.error;
@@ -85,12 +178,13 @@ export function VideoSlide({ item, audioUrl, isGif }: Props) {
 
     video.addEventListener("error", onError);
     return () => video.removeEventListener("error", onError);
-  }, [videoSrc, item.url]);
+  }, [ready, item.url]);
 
+  // Audio sync
   useEffect(() => {
     const video = videoRef.current;
     const audio = audioRef.current;
-    if (!video || !audio) return;
+    if (!video || !audio || !audioUrl) return;
 
     const syncPlay = () => {
       audio.currentTime = video.currentTime;
@@ -110,11 +204,12 @@ export function VideoSlide({ item, audioUrl, isGif }: Props) {
       video.removeEventListener("pause", syncPause);
       video.removeEventListener("seeked", syncSeek);
     };
-  }, [audioSrc]);
+  }, [audioUrl, ready]);
 
+  // Volume/mute
   useEffect(() => {
     const vol = volume / 100;
-    if (audioRef.current) {
+    if (audioRef.current && audioUrl) {
       audioRef.current.muted = isMuted;
       audioRef.current.volume = vol;
     }
@@ -123,6 +218,17 @@ export function VideoSlide({ item, audioUrl, isGif }: Props) {
       videoRef.current.volume = vol;
     }
   }, [isMuted, volume, audioUrl, isGif]);
+
+  // Set video element attributes based on current props
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.autoplay = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.controls = !isGif;
+    video.muted = isGif || (!!audioUrl ? true : isMuted);
+  }, [isGif, audioUrl, isMuted, ready]);
 
   if (loading) {
     return (
@@ -133,28 +239,22 @@ export function VideoSlide({ item, audioUrl, isGif }: Props) {
   }
 
   return (
-    <div className="flex items-center justify-center w-full h-full">
-      {videoSrc && (
-        <video
-          ref={videoRef}
-          src={videoSrc}
-          className="max-w-full max-h-full object-contain"
-          autoPlay
-          loop
-          muted={isGif || (!!audioUrl ? true : isMuted)}
-          playsInline
-          controls={!isGif}
-        />
-      )}
-      {audioSrc && (
-        <audio ref={audioRef} src={audioSrc} muted={isMuted} preload="auto" loop />
-      )}
+    <>
       {videoError && (
-        <div className="absolute bottom-4 left-4 right-4 bg-red-900/80 text-white text-xs p-2 rounded font-mono break-all">
+        <div className="absolute bottom-4 left-4 right-4 bg-red-900/80 text-white text-xs p-2 rounded font-mono break-all z-10">
           Video error: {videoError}<br />
           URL: {item.url}
         </div>
       )}
-    </div>
+    </>
   );
+}
+
+// ─── Exported component: picks mpv on Linux, HTML5 otherwise ────────────────
+
+export function VideoSlide(props: Props) {
+  if (isLinux) {
+    return <MpvVideoSlide item={props.item} audioUrl={props.audioUrl} isGif={props.isGif} />;
+  }
+  return <Html5VideoSlide {...props} />;
 }

@@ -1,10 +1,14 @@
 mod config;
 mod favorites;
+#[cfg(target_os = "linux")]
+mod mpv_gtk;
+#[cfg(target_os = "linux")]
+mod mpvplayer;
 mod reddit;
 mod saved;
 mod videoserver;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -22,9 +26,16 @@ pub struct AppState {
     pub favorites_path: PathBuf,
     pub favorites: Mutex<Vec<String>>,
     pub video_cache: videoserver::VideoCache,
+    pub video_server_port: u16,
     pub config_path: PathBuf,
     pub save_path: Mutex<PathBuf>,
     pub saved_ids: Mutex<HashSet<String>>,
+    #[cfg(target_os = "linux")]
+    pub mpv_player: std::sync::Arc<Mutex<Option<mpvplayer::MpvPlayer>>>,
+    /// Shared flag to control GLArea visibility from any thread.
+    /// The GTK main loop timer reads this and shows/hides the GLArea.
+    #[cfg(target_os = "linux")]
+    pub mpv_visible: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 fn url_to_cache_key(url: &str) -> String {
@@ -42,16 +53,6 @@ pub fn decode_proxy_url(url: &str) -> String {
     }
 }
 
-/// Evict half the cache when it exceeds the limit.
-fn ensure_cache_capacity(cache: &mut HashMap<String, videoserver::CachedVideo>) {
-    if cache.len() >= 20 {
-        let keys: Vec<String> = cache.keys().take(10).cloned().collect();
-        for key in keys {
-            cache.remove(&key);
-        }
-        eprintln!("[cache] Evicted 10 entries, {} remaining", cache.len());
-    }
-}
 
 #[tauri::command]
 async fn fetch_posts(
@@ -118,33 +119,71 @@ async fn remove_favorite(
 async fn preload_video(
     state: tauri::State<'_, AppState>,
     url: String,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let real_url = decode_proxy_url(&url);
     let key = url_to_cache_key(&real_url);
 
     {
-        let cache = state.video_cache.lock().await;
-        if cache.contains_key(&key) {
-            return Ok(());
+        let mut cache = state.video_cache.lock().await;
+        if cache.entries.contains_key(&key) {
+            cache.touch(&key);
+            return Ok(key);
+        }
+        // Check if another task is already downloading this URL
+        if !cache.inflight.insert(key.clone()) {
+            eprintln!("[preload] Already downloading: {}", real_url);
+            // Wait for the other download by polling the cache
+            drop(cache);
+            for _ in 0..300 { // up to 30 seconds
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                let cache = state.video_cache.lock().await;
+                if cache.entries.contains_key(&key) {
+                    return Ok(key);
+                }
+                if !cache.inflight.contains(&key) {
+                    // Other download finished but entry got evicted or failed
+                    break;
+                }
+            }
+            return Err("Timed out waiting for in-flight download".to_string());
         }
     }
 
     eprintln!("[preload] Downloading: {}", real_url);
-    let resp = state.client.get(&real_url).send().await.map_err(|e| e.to_string())?;
-    let status = resp.status();
-    let content_type = resp
-        .headers()
-        .get("content-type")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("video/mp4")
-        .to_string();
-    let bytes = resp.bytes().await.map_err(|e| e.to_string())?.to_vec();
-    eprintln!("[preload] Cached {} bytes (status={} type={}) for: {}", bytes.len(), status, content_type, real_url);
+    let download = async {
+        let resp = state.client.get(&real_url).send().await.map_err(|e| e.to_string())?;
+        let status = resp.status();
+        if status == reqwest::StatusCode::TOO_MANY_REQUESTS || status == reqwest::StatusCode::FORBIDDEN {
+            return Err(format!("Rate limited ({}): {}", status, real_url));
+        }
+        let content_type = resp
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("video/mp4")
+            .to_string();
+        let bytes = resp.bytes().await.map_err(|e| e.to_string())?.to_vec();
+        eprintln!("[preload] Cached {} bytes (status={} type={}) for: {}", bytes.len(), status, content_type, real_url);
+        Ok::<_, String>((bytes, content_type))
+    };
+    let result = match tokio::time::timeout(std::time::Duration::from_secs(30), download).await {
+        Ok(r) => r,
+        Err(_) => {
+            eprintln!("[preload] TIMEOUT after 30s: {}", real_url);
+            Err(format!("Download timed out: {}", real_url))
+        }
+    };
 
     let mut cache = state.video_cache.lock().await;
-    ensure_cache_capacity(&mut cache);
-    cache.insert(key, videoserver::CachedVideo { bytes, content_type });
-    Ok(())
+    cache.inflight.remove(&key);
+
+    match result {
+        Ok((bytes, content_type)) => {
+            cache.insert(key.clone(), bytes, content_type);
+            Ok(key)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 #[tauri::command]
@@ -156,8 +195,9 @@ async fn fetch_video_bytes(
     let key = url_to_cache_key(&real_url);
 
     {
-        let cache = state.video_cache.lock().await;
-        if let Some(cached) = cache.get(&key) {
+        let mut cache = state.video_cache.lock().await;
+        cache.touch(&key);
+        if let Some(cached) = cache.entries.get(&key) {
             eprintln!("[fetch_video_bytes] Cache HIT: {} ({} bytes)", real_url, cached.bytes.len());
             return Ok(tauri::ipc::Response::new(cached.bytes.clone()));
         }
@@ -188,8 +228,7 @@ async fn fetch_video_bytes(
 
     let result = tauri::ipc::Response::new(bytes.clone());
     let mut cache = state.video_cache.lock().await;
-    ensure_cache_capacity(&mut cache);
-    cache.insert(key, videoserver::CachedVideo { bytes, content_type });
+    cache.insert(key, bytes, content_type);
     Ok(result)
 }
 
@@ -286,20 +325,170 @@ async fn open_save_folder(
     Ok(())
 }
 
-fn serve_bytes(bytes: &[u8], content_type: &str, _range: &Option<String>) -> HttpResponse<Vec<u8>> {
+#[tauri::command]
+async fn dump_video_cache(state: tauri::State<'_, AppState>) -> Result<Vec<String>, String> {
+    let cache = state.video_cache.lock().await;
+    let mut paths = Vec::new();
+    for (key, entry) in &cache.entries {
+        let ext = if entry.content_type.contains("mp4") { "mp4" } else { "webm" };
+        let path = format!("/tmp/crabbit_cache_{}_{}.{}", &key[..8], entry.bytes.len(), ext);
+        std::fs::write(&path, &entry.bytes).map_err(|e| e.to_string())?;
+        paths.push(format!("{} ({} bytes, {})", path, entry.bytes.len(), entry.content_type));
+    }
+    eprintln!("[dump] Wrote {} cached videos to /tmp", paths.len());
+    Ok(paths)
+}
+
+#[tauri::command]
+fn get_video_server_port(state: tauri::State<'_, AppState>) -> u16 {
+    state.video_server_port
+}
+
+#[tauri::command]
+fn log_frontend(level: String, msg: String) {
+    eprintln!("[frontend:{}] {}", level, msg);
+}
+
+#[tauri::command]
+fn toggle_devtools(window: tauri::WebviewWindow) {
+    if window.is_devtools_open() {
+        window.close_devtools();
+    } else {
+        window.open_devtools();
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+async fn mpv_load(
+    state: tauri::State<'_, AppState>,
+    video_url: String,
+    audio_url: Option<String>,
+    is_gif: bool,
+    muted: bool,
+    volume: i64,
+) -> Result<(), String> {
+    let mut player = state.mpv_player.lock().map_err(|e| e.to_string())?;
+    if let Some(ref mut p) = *player {
+        let result = p.load(&video_url, audio_url.as_deref(), is_gif, muted, volume);
+        if result.is_ok() {
+            state.mpv_visible.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        result
+    } else {
+        Err("MpvPlayer not initialized".to_string())
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+async fn mpv_stop(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    state.mpv_visible.store(false, std::sync::atomic::Ordering::Relaxed);
+    let mut player = state.mpv_player.lock().map_err(|e| e.to_string())?;
+    if let Some(ref mut p) = *player {
+        p.stop()
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+async fn mpv_reposition(
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    use crate::mpv_gtk::reposition_overlay;
+    // Store WebView-relative coordinates; the GTK timer converts to screen coords
+    reposition_overlay(x as i32, y as i32, width as i32, height as i32);
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+async fn mpv_set_overlay_visible(
+    state: tauri::State<'_, AppState>,
+    visible: bool,
+) -> Result<(), String> {
+    // Only show overlay if mpv is actually active
+    let player = state.mpv_player.lock().map_err(|e| e.to_string())?;
+    if visible {
+        if let Some(ref p) = *player {
+            if p.is_active() {
+                state.mpv_visible.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+    } else {
+        state.mpv_visible.store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+async fn mpv_set_property(
+    state: tauri::State<'_, AppState>,
+    name: String,
+    value: String,
+) -> Result<(), String> {
+    let player = state.mpv_player.lock().map_err(|e| e.to_string())?;
+    if let Some(ref p) = *player {
+        p.set_property_string(&name, &value)
+    } else {
+        Err("MpvPlayer not initialized".to_string())
+    }
+}
+
+fn serve_bytes(bytes: &[u8], content_type: &str, range: &Option<String>) -> HttpResponse<Vec<u8>> {
     let total = bytes.len();
+
+    if let Some(range_str) = range {
+        if let Some(range_val) = range_str.strip_prefix("bytes=") {
+            let mut parts = range_val.splitn(2, '-');
+            if let (Some(start_str), Some(end_str)) = (parts.next(), parts.next()) {
+                if let Ok(start) = start_str.trim().parse::<usize>() {
+                    let end = if end_str.trim().is_empty() {
+                        total.saturating_sub(1)
+                    } else {
+                        end_str.trim().parse::<usize>().unwrap_or(total - 1)
+                    };
+                    let end = end.min(total.saturating_sub(1));
+                    if start < total && start <= end {
+                        let slice = &bytes[start..=end];
+                        eprintln!("[serve_bytes] 206 bytes {}-{}/{} ({} bytes) type={}", start, end, total, slice.len(), content_type);
+                        return HttpResponse::builder()
+                            .status(StatusCode::PARTIAL_CONTENT)
+                            .header("Content-Type", content_type)
+                            .header("Content-Length", slice.len().to_string())
+                            .header("Content-Range", format!("bytes {}-{}/{}", start, end, total))
+                            .header("Accept-Ranges", "bytes")
+                            .body(slice.to_vec())
+                            .unwrap();
+                    }
+                }
+            }
+        }
+    }
+
     eprintln!("[serve_bytes] 200 full {} bytes type={}", total, content_type);
     HttpResponse::builder()
         .status(StatusCode::OK)
         .header("Content-Type", content_type)
         .header("Content-Length", total.to_string())
+        .header("Accept-Ranges", "bytes")
         .body(bytes.to_vec())
         .unwrap()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run(verbose: bool) {
-    let video_cache: videoserver::VideoCache = std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+    let video_cache: videoserver::VideoCache = std::sync::Arc::new(tokio::sync::Mutex::new(videoserver::VideoCacheInner::new()));
+
+    let video_server_port = tauri::async_runtime::block_on(
+        videoserver::start_video_server(video_cache.clone())
+    );
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -335,8 +524,9 @@ pub fn run(verbose: bool) {
                 let key = url_to_cache_key(&video_url);
 
                 {
-                    let cache = state.video_cache.lock().await;
-                    if let Some(cached) = cache.get(&key) {
+                    let mut cache = state.video_cache.lock().await;
+                    cache.touch(&key);
+                    if let Some(cached) = cache.entries.get(&key) {
                         eprintln!("[media-proxy] Cache HIT: {} ({} bytes)", video_url, cached.bytes.len());
                         responder.respond(serve_bytes(&cached.bytes, &cached.content_type, &range_header));
                         return;
@@ -365,8 +555,7 @@ pub fn run(verbose: bool) {
                                 let response = serve_bytes(&bytes_vec, &content_type, &range_header);
 
                                 let mut cache = state.video_cache.lock().await;
-                                ensure_cache_capacity(&mut cache);
-                                cache.insert(key, videoserver::CachedVideo { bytes: bytes_vec, content_type });
+                                cache.insert(key, bytes_vec, content_type);
 
                                 responder.respond(response);
                             }
@@ -506,15 +695,57 @@ pub fn run(verbose: bool) {
             let save_path = config::resolve_save_path(&cfg, &app_data_dir);
             let saved_ids = saved::load_saved_ids(&save_path);
 
+            // Initialize mpv player on Linux
+            #[cfg(target_os = "linux")]
+            let mpv_player = {
+                match mpvplayer::MpvPlayer::new(video_server_port) {
+                    Ok(player) => {
+                        eprintln!("[crabbit] MpvPlayer created successfully");
+                        Mutex::new(Some(player))
+                    }
+                    Err(e) => {
+                        eprintln!("[crabbit] Failed to create MpvPlayer: {}", e);
+                        Mutex::new(None)
+                    }
+                }
+            };
+
+            #[cfg(target_os = "linux")]
+            let mpv_player_arc = std::sync::Arc::new(mpv_player);
+
             app.manage(AppState {
                 client: build_client(),
                 favorites_path: fav_path,
                 favorites: Mutex::new(favs),
                 video_cache: video_cache.clone(),
+                video_server_port,
                 config_path: cfg_path,
                 save_path: Mutex::new(save_path),
                 saved_ids: Mutex::new(saved_ids),
+                #[cfg(target_os = "linux")]
+                mpv_player: mpv_player_arc.clone(),
+                #[cfg(target_os = "linux")]
+                mpv_visible: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             });
+
+            // Set up mpv overlay window on Linux
+            #[cfg(target_os = "linux")]
+            {
+                if let Some(window) = app.get_webview_window("main") {
+                    let state = app.state::<AppState>();
+                    let visible_flag = state.mpv_visible.clone();
+                    match mpv_gtk::setup_overlay(&window, mpv_player_arc, visible_flag) {
+                        Ok(()) => {
+                            eprintln!("[crabbit] mpv overlay setup successful");
+                        }
+                        Err(e) => {
+                            eprintln!("[crabbit] mpv overlay setup failed: {}", e);
+                        }
+                    }
+                } else {
+                    eprintln!("[crabbit] Could not find main window for mpv setup");
+                }
+            }
 
             Ok(())
         })
@@ -525,6 +756,10 @@ pub fn run(verbose: bool) {
             remove_favorite,
             preload_video,
             fetch_video_bytes,
+            dump_video_cache,
+            get_video_server_port,
+            log_frontend,
+            toggle_devtools,
             save_post,
             get_saved_posts,
             delete_saved_post,
@@ -532,6 +767,16 @@ pub fn run(verbose: bool) {
             get_save_path,
             set_save_path,
             open_save_folder,
+            #[cfg(target_os = "linux")]
+            mpv_load,
+            #[cfg(target_os = "linux")]
+            mpv_stop,
+            #[cfg(target_os = "linux")]
+            mpv_set_property,
+            #[cfg(target_os = "linux")]
+            mpv_set_overlay_visible,
+            #[cfg(target_os = "linux")]
+            mpv_reposition,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
