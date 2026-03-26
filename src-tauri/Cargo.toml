@@ -38,4 +38,3 @@ libmpv2 = "5.0"
 gtk = { version = "0.18", features = ["v3_24"] }
 gdk = "0.18"
 glib = "0.18"
-cairo = { version = "0.18", package = "cairo-rs" }

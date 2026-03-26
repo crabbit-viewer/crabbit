@@ -24,7 +24,6 @@ async function getServerPort(): Promise<number> {
 
 function MpvVideoSlide({ item, audioUrl, isGif }: Pick<Props, "item" | "audioUrl" | "isGif">) {
   const { isMuted, volume } = useContext(AppStateContext);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Load video into mpv
@@ -32,17 +31,14 @@ function MpvVideoSlide({ item, audioUrl, isGif }: Pick<Props, "item" | "audioUrl
     let cancelled = false;
 
     async function load() {
-      setLoading(true);
       setError(null);
       try {
         console.log("[mpv-slide] Starting load for:", item.url);
         const port = await getServerPort();
-        // Preload video (downloads to Rust cache, returns cache key)
         const videoKey: string = await invoke("preload_video", { url: item.url });
         if (cancelled) { console.log("[mpv-slide] Cancelled after preload_video"); return; }
         const videoUrl = `http://127.0.0.1:${port}/${videoKey}`;
 
-        // Preload audio if present (v.redd.it dual stream)
         let audioUrlFull: string | null = null;
         if (audioUrl) {
           const audioKey: string = await invoke("preload_video", { url: audioUrl });
@@ -51,7 +47,6 @@ function MpvVideoSlide({ item, audioUrl, isGif }: Pick<Props, "item" | "audioUrl
         }
 
         console.log("[mpv-slide] Calling mpv_load:", videoUrl);
-        // Tell mpv to play
         await invoke("mpv_load", {
           videoUrl,
           audioUrl: audioUrlFull,
@@ -63,8 +58,6 @@ function MpvVideoSlide({ item, audioUrl, isGif }: Pick<Props, "item" | "audioUrl
       } catch (e) {
         console.error("[mpv-slide] Error:", e);
         if (!cancelled) setError(`${e}`);
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     }
 
@@ -92,14 +85,6 @@ function MpvVideoSlide({ item, audioUrl, isGif }: Pick<Props, "item" | "audioUrl
       value: String(volume),
     }).catch(() => {});
   }, [volume]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center w-full h-full">
-        <div className="text-white/50 text-sm">Loading video...</div>
-      </div>
-    );
-  }
 
   return (
     <>

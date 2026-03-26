@@ -412,9 +412,8 @@ async fn mpv_set_overlay_visible(
     state: tauri::State<'_, AppState>,
     visible: bool,
 ) -> Result<(), String> {
-    // Only show overlay if mpv is actually active
-    let player = state.mpv_player.lock().map_err(|e| e.to_string())?;
     if visible {
+        let player = state.mpv_player.lock().map_err(|e| e.to_string())?;
         if let Some(ref p) = *player {
             if p.is_active() {
                 state.mpv_visible.store(true, std::sync::atomic::Ordering::Relaxed);
