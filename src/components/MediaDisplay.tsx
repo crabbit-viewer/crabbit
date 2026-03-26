@@ -33,26 +33,11 @@ export function MediaDisplay({ post }: Props) {
     }).catch(() => {});
   }, []);
 
-  // Hide mpv overlay when dropdowns/popovers are open (they render behind the overlay)
-  useEffect(() => {
-    if (!isLinux) return;
-    const observer = new MutationObserver(() => {
-      // Check if any dropdown/popover (z-20) is visible in the DOM
-      const hasPopover = document.querySelector(".z-20") !== null;
-      invoke("mpv_set_overlay_visible", { visible: !hasPopover }).catch(() => {});
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, []);
-
   useEffect(() => {
     if (!isLinux || !containerRef.current) return;
-    // Report initial bounds
     reportBounds();
-    // Watch for resize
     const observer = new ResizeObserver(reportBounds);
     observer.observe(containerRef.current);
-    // Also report on fullscreen changes
     const onFullscreen = () => setTimeout(reportBounds, 100);
     document.addEventListener("fullscreenchange", onFullscreen);
     return () => {
@@ -61,15 +46,24 @@ export function MediaDisplay({ post }: Props) {
     };
   }, [reportBounds, post.id]);
 
+  // Hide mpv overlay when dropdowns/popovers are open (they render behind the overlay)
+  useEffect(() => {
+    if (!isLinux) return;
+    const observer = new MutationObserver(() => {
+      const hasPopover = document.querySelector(".z-20") !== null;
+      invoke("mpv_set_overlay_visible", { visible: !hasPopover }).catch(() => {});
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
   const isVideo = post.media_type === "video" || post.media_type === "animated_gif";
 
   if (isVideo) {
-    // On Linux, mpv renders via an overlay window — no HTML5 <video>/<audio> needed.
-    // The div ref reports its bounds so the overlay positions correctly.
     if (isLinux) {
       return (
         <>
-          {/* pt-10 = 40px top (SubredditBar), pb-12 = 48px bottom (ControlBar+PostOverlay) */}
+          {/* Offset from bars: top-10 = SubredditBar (40px), bottom-12 = ControlBar+PostOverlay (48px) */}
           <div ref={containerRef} className="absolute inset-0 top-10 bottom-12 bg-black" />
           <VideoSlide
             item={post.media[0]}
@@ -82,7 +76,6 @@ export function MediaDisplay({ post }: Props) {
       );
     }
 
-    // Non-Linux: use HTML5 <video> + <audio> elements
     return (
       <>
         <div className="flex items-center justify-center w-full h-full">
