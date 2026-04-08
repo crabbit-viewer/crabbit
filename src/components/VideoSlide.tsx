@@ -1,8 +1,7 @@
 import { useEffect, useContext, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../invoke";
 import { MediaItem } from "../types";
 import { AppStateContext } from "../state/context";
-import { isLinux } from "../platform";
 
 interface Props {
   item: MediaItem;
@@ -20,88 +19,7 @@ async function getServerPort(): Promise<number> {
   return cachedPort;
 }
 
-// ─── Linux: mpv-backed video ────────────────────────────────────────────────
-
-function MpvVideoSlide({ item, audioUrl, isGif }: Pick<Props, "item" | "audioUrl" | "isGif">) {
-  const { isMuted, volume } = useContext(AppStateContext);
-  const [error, setError] = useState<string | null>(null);
-
-  // Load video into mpv
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setError(null);
-      try {
-        console.log("[mpv-slide] Starting load for:", item.url);
-        const port = await getServerPort();
-        const videoKey: string = await invoke("preload_video", { url: item.url });
-        if (cancelled) { console.log("[mpv-slide] Cancelled after preload_video"); return; }
-        const videoUrl = `http://127.0.0.1:${port}/${videoKey}`;
-
-        let audioUrlFull: string | null = null;
-        if (audioUrl) {
-          const audioKey: string = await invoke("preload_video", { url: audioUrl });
-          if (cancelled) { console.log("[mpv-slide] Cancelled after audio preload"); return; }
-          audioUrlFull = `http://127.0.0.1:${port}/${audioKey}`;
-        }
-
-        console.log("[mpv-slide] Calling mpv_load:", videoUrl);
-        await invoke("mpv_load", {
-          videoUrl,
-          audioUrl: audioUrlFull,
-          isGif,
-          muted: isMuted,
-          volume,
-        });
-        console.log("[mpv-slide] mpv_load succeeded");
-      } catch (e) {
-        console.error("[mpv-slide] Error:", e);
-        if (!cancelled) setError(`${e}`);
-      }
-    }
-
-    load();
-
-    return () => {
-      console.log("[mpv-slide] Cleanup, setting cancelled=true");
-      cancelled = true;
-      invoke("mpv_stop").catch(() => {});
-    };
-  }, [item.url, audioUrl]);
-
-  // Sync mute state to mpv
-  useEffect(() => {
-    invoke("mpv_set_property", {
-      name: "mute",
-      value: isMuted || isGif ? "yes" : "no",
-    }).catch(() => {});
-  }, [isMuted, isGif]);
-
-  // Sync volume to mpv
-  useEffect(() => {
-    invoke("mpv_set_property", {
-      name: "volume",
-      value: String(volume),
-    }).catch(() => {});
-  }, [volume]);
-
-  return (
-    <>
-      {error && (
-        <div className="absolute bottom-4 left-4 right-4 bg-red-900/80 text-white text-xs p-2 rounded font-mono break-all z-10">
-          mpv error: {error}
-          <br />
-          URL: {item.url}
-        </div>
-      )}
-    </>
-  );
-}
-
-// ─── Non-Linux: HTML5 <video> backed ────────────────────────────────────────
-
-function Html5VideoSlide({ item, audioUrl, isGif, videoRef, audioRef }: Props) {
+export function VideoSlide({ item, audioUrl, isGif, videoRef, audioRef }: Props) {
   const { isMuted, volume } = useContext(AppStateContext);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -233,13 +151,4 @@ function Html5VideoSlide({ item, audioUrl, isGif, videoRef, audioRef }: Props) {
       )}
     </>
   );
-}
-
-// ─── Exported component: picks mpv on Linux, HTML5 otherwise ────────────────
-
-export function VideoSlide(props: Props) {
-  if (isLinux) {
-    return <MpvVideoSlide item={props.item} audioUrl={props.audioUrl} isGif={props.isGif} />;
-  }
-  return <Html5VideoSlide {...props} />;
 }

@@ -1,5 +1,5 @@
 import { useCallback, useContext } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../invoke";
 import { AppDispatchContext, AppStateContext } from "../state/context";
 import { MediaPost, SavedPostMeta } from "../types";
 
@@ -7,14 +7,14 @@ function metaToMediaPost(meta: SavedPostMeta): MediaPost {
   const sub = meta.subreddit.toLowerCase();
 
   const media = meta.files.map((file) => ({
-    url: `http://saved-media.localhost/${sub}/${encodeURIComponent(file)}`,
+    url: `saved-media://localhost/${sub}/${encodeURIComponent(file)}`,
     width: null,
     height: null,
     caption: null,
   }));
 
   const audio_url = meta.audio_file
-    ? `http://saved-media.localhost/${sub}/${encodeURIComponent(meta.audio_file)}`
+    ? `saved-media://localhost/${sub}/${encodeURIComponent(meta.audio_file)}`
     : null;
 
   return {

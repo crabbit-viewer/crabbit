@@ -1,10 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./invoke";
 import App from "./App";
 import "./index.css";
 
-// Pipe frontend console output to Rust stderr so it appears in crabbit.log
+// Pipe frontend console output to backend stderr
 const origLog = console.log;
 const origWarn = console.warn;
 const origError = console.error;

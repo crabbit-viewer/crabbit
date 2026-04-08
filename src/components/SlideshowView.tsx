@@ -5,6 +5,7 @@ import { PostOverlay } from "./PostOverlay";
 import { ControlBar } from "./ControlBar";
 import { SubredditBar } from "./SubredditBar";
 import { useSavedPosts } from "../hooks/useSavedPosts";
+import { HomePage } from "./HomePage";
 
 interface Props {
   onNext: () => void;
@@ -19,15 +20,20 @@ export function SlideshowView({ onNext, onPrev, onTogglePlay, uiVisible }: Props
   const currentPost = state.posts[state.currentIndex];
 
   if (!currentPost) {
-    const message = state.viewMode === "saved"
-      ? "No saved posts yet"
-      : "Enter a subreddit to start browsing";
+    if (state.viewMode === "saved") {
+      return (
+        <>
+          <SubredditBar uiVisible={true} />
+          <div className="flex items-center justify-center w-full h-full text-white/30 text-base tracking-wide">
+            No saved posts yet
+          </div>
+        </>
+      );
+    }
     return (
       <>
         <SubredditBar uiVisible={true} />
-        <div className="flex items-center justify-center w-full h-full text-white/30 text-base tracking-wide">
-          {message}
-        </div>
+        <HomePage />
       </>
     );
   }

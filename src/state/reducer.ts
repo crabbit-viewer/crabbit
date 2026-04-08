@@ -42,7 +42,7 @@ const defaultState: AppState = {
   isPlaying: false,
   timerSpeed: 5000,
   showOverlay: true,
-  subreddit: "earthporn",
+  subreddit: "",
   sort: "hot",
   timeRange: "day",
   galleryIndex: 0,
@@ -80,7 +80,8 @@ export type AppAction =
   | { type: "SET_NOTIFICATION"; payload: Notification | null }
   | { type: "SET_CURRENT_POST_SAVED"; payload: boolean }
   | { type: "ENTER_SAVED_VIEW"; payload: { posts: MediaPost[] } }
-  | { type: "EXIT_SAVED_VIEW" };
+  | { type: "EXIT_SAVED_VIEW" }
+  | { type: "REMOVE_POSTS_BY_AUTHOR"; payload: string };
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -177,6 +178,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         viewMode: "slideshow",
         galleryIndex: 0,
       };
+    }
+    case "REMOVE_POSTS_BY_AUTHOR": {
+      const authorLower = action.payload.toLowerCase();
+      const filtered = state.posts.filter(
+        (p) => p.author.toLowerCase() !== authorLower
+      );
+      const newIndex = Math.min(state.currentIndex, Math.max(0, filtered.length - 1));
+      return { ...state, posts: filtered, currentIndex: newIndex, galleryIndex: 0 };
     }
     default:
       return state;

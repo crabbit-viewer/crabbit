@@ -1,10 +1,11 @@
 import { useState, useContext, useEffect, useRef, useCallback, FormEvent } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../invoke";
 import { AppStateContext, AppDispatchContext } from "../state/context";
 import { SortOption, TimeRange } from "../types";
 import { useReddit } from "../hooks/useReddit";
 import { useSavedPosts } from "../hooks/useSavedPosts";
 import { useClickOutside } from "../hooks/useClickOutside";
+import { SubredditAnalyzer } from "./SubredditAnalyzer";
 
 function Dropdown({ value, options, onChange }: {
   value: string;
@@ -62,8 +63,10 @@ function SettingsPopover() {
 
   const pickFolder = async () => {
     try {
-      const { open: openDialog } = await import("@tauri-apps/plugin-dialog");
-      const selected = await openDialog({ directory: true, title: "Choose save folder" });
+      const selected = await invoke<string | null>("show_open_dialog", {
+        properties: ["openDirectory"],
+        title: "Choose save folder",
+      });
       if (selected) {
         await invoke("set_save_path", { path: selected });
         setSavePath(selected);
@@ -124,13 +127,25 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
   const [input, setInput] = useState(state.subreddit);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [showFavs, setShowFavs] = useState(false);
+  const [ignoredUsers, setIgnoredUsers] = useState<string[]>([]);
+  const [showIgnored, setShowIgnored] = useState(false);
 
   const isSavedMode = state.viewMode === "saved";
   const chromeClass = `ui-chrome ui-top ${uiVisible ? "" : "ui-hidden"}`;
 
   useEffect(() => {
     invoke<string[]>("get_favorites").then(setFavorites).catch(() => {});
+    invoke<{ sort: string; time_range: string }>("get_sort_preference")
+      .then((pref) => {
+        dispatch({ type: "SET_SORT", payload: pref.sort as SortOption });
+        dispatch({ type: "SET_TIME_RANGE", payload: pref.time_range as TimeRange });
+      })
+      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    setInput(state.subreddit);
+  }, [state.subreddit]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -151,11 +166,13 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
   const handleSortChange = (sort: string) => {
     dispatch({ type: "SET_SORT", payload: sort as SortOption });
     dispatch({ type: "SET_PLAYING", payload: false });
+    invoke("set_sort_preference", { sort, time_range: state.timeRange }).catch(() => {});
   };
 
   const handleTimeChange = (time: string) => {
     dispatch({ type: "SET_TIME_RANGE", payload: time as TimeRange });
     dispatch({ type: "SET_PLAYING", payload: false });
+    invoke("set_sort_preference", { sort: state.sort, time_range: time }).catch(() => {});
   };
 
   useEffect(() => {
@@ -183,7 +200,18 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
 
   return (
     <div className={`absolute top-0 left-0 right-0 h-10 bg-black/40 flex items-center px-4 gap-2 z-10 ${chromeClass}`} data-ui-chrome>
-      <span className="text-white/30 font-medium text-sm tracking-tight mr-1">crabbit</span>
+      <button
+        onClick={() => {
+          dispatch({ type: "SET_SUBREDDIT", payload: "" });
+          dispatch({ type: "SET_POSTS", payload: { posts: [], after: null } });
+          dispatch({ type: "SET_PLAYING", payload: false });
+          setInput("");
+        }}
+        className="text-white/30 hover:text-white/50 font-medium text-sm tracking-tight mr-1 transition-colors"
+        title="Home"
+      >
+        crabbit
+      </button>
 
       <form onSubmit={handleSubmit} className="flex items-center gap-0">
         <span className="text-white/25 text-xs">r/</span>
@@ -233,6 +261,8 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
       )}
 
       <div className="relative ml-auto flex items-center gap-1">
+        <SubredditAnalyzer onOpen={() => { setShowFavs(false); setShowIgnored(false); }} />
+
         <button
           onClick={loadSavedPosts}
           className="icon-btn"
@@ -245,7 +275,51 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
 
         <button
           onClick={() => {
+            setShowIgnored(!showIgnored);
+            setShowFavs(false);
+            invoke<string[]>("get_ignored_users").then(setIgnoredUsers).catch(() => {});
+          }}
+          className="icon-btn"
+          title="Ignored users"
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" fillRule="evenodd" clipRule="evenodd"/>
+          </svg>
+        </button>
+        {showIgnored && ignoredUsers.length > 0 && (
+          <div className="absolute right-0 top-full mt-1 bg-black/90 backdrop-blur-sm border border-white/10 rounded-lg shadow-2xl min-w-[140px] z-20 py-1">
+            {ignoredUsers.map((user) => (
+              <div
+                key={user}
+                className="flex items-center justify-between px-3 py-1.5 text-xs text-white/50 hover:bg-white/5 transition-colors"
+              >
+                <span>u/{user}</span>
+                <button
+                  onClick={async () => {
+                    await invoke("remove_ignored_user", { username: user });
+                    setIgnoredUsers(ignoredUsers.filter((u) => u !== user));
+                  }}
+                  className="ml-2 text-white/30 hover:text-red-400 transition-colors"
+                  title="Unignore"
+                >
+                  <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                    <path d="M4.646 4.646a.5.5 0 01.708 0L8 7.293l2.646-2.647a.5.5 0 01.708.708L8.707 8l2.647 2.646a.5.5 0 01-.708.708L8 8.707l-2.646 2.647a.5.5 0 01-.708-.708L7.293 8 4.646 5.354a.5.5 0 010-.708z"/>
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {showIgnored && ignoredUsers.length === 0 && (
+          <div className="absolute right-0 top-full mt-1 bg-black/90 backdrop-blur-sm border border-white/10 rounded-lg shadow-2xl min-w-[140px] z-20 py-1">
+            <div className="px-3 py-1.5 text-xs text-white/30">No ignored users</div>
+          </div>
+        )}
+
+        <button
+          onClick={() => {
             setShowFavs(!showFavs);
+            setShowIgnored(false);
             invoke<string[]>("get_favorites").then(setFavorites).catch(() => {});
           }}
           className="icon-btn"

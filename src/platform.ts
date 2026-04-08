@@ -1,3 +1,4 @@
-// Platform detection for conditional video rendering
-// On Linux, we use libmpv instead of HTML5 <video> to avoid WebKitGTK/GStreamer issues
+// Platform detection — no longer needed for video rendering
+// since Electron uses Chromium on all platforms.
+// Kept for any future platform-specific needs.
 export const isLinux = navigator.platform.startsWith("Linux");

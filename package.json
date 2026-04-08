@@ -1,25 +1,30 @@
 {
   "name": "crabbit",
   "version": "1.0.0",
-  "description": "",
+  "description": "Reddit media slideshow viewer",
+  "main": "dist-electron/main.js",
+  "type": "commonjs",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "tauri": "tauri"
+    "build": "tsc --noEmit && vite build && tsc -p tsconfig.electron.json",
+    "build:frontend": "vite build",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "electron:dev": "tsc -p tsconfig.electron.json && VITE_DEV_SERVER_URL=http://localhost:1420 electron dist-electron/main.js",
+    "package": "bun run build && electron-builder --linux",
+    "typecheck": "tsc --noEmit"
   },
-  "type": "module",
   "dependencies": {
-    "@tauri-apps/plugin-dialog": "^2.6.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
-    "@tauri-apps/api": "^2.10.1",
-    "@tauri-apps/cli": "^2.10.1",
+    "@types/node": "^22.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
     "vite": "^8.0.1"

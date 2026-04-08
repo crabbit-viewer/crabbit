@@ -1,6 +1,6 @@
 # Crabbit
 
-Reddit media slideshow viewer — a desktop app modeled on redditp.com. Tauri v2 (Rust backend) + React/Vite/TypeScript frontend with Tailwind CSS.
+Reddit media slideshow viewer — a desktop app modeled on redditp.com. Electron + React/Vite/TypeScript frontend with Tailwind CSS.
 
 ## Build Environment
 
@@ -19,53 +19,77 @@ Claude runs inside a **Podman container** (Fedora-based, built from `Containerfi
 
 **Not persisted:** global git config, any packages installed at runtime, anything outside the mounts above. Per-repo git config (in `.git/config`) IS persisted since repos are under `/workspace`.
 
-Tools available in container: `cargo`, `rustc`, `rustup`, `bun`, `git`, `node`, `npm` (no `.exe` suffixes)
+Tools available in container: `bun`, `git`, `node`, `npm`, `npx` (no `.exe` suffixes)
 
 ## Build Commands
 
 ```bash
-# TypeScript type check
+# TypeScript type check (frontend)
 bun tsc --noEmit
+
+# TypeScript type check (electron main process)
+bun tsc -p tsconfig.electron.json --noEmit
 
 # Build frontend only
 bun vite build
 
-# Rust check (from project root)
-cd src-tauri && cargo check
+# Build electron main process only
+bun tsc -p tsconfig.electron.json
 
-# Full Tauri build with AppImage/deb/rpm bundles
-NO_STRIP=true bun tauri build
+# Full build (frontend + electron)
+bun run build
 
-# Dev mode
-bun tauri dev
+# Build + package as AppImage (what the user runs)
+bun run package
+
+# Dev mode (run vite dev server first, then electron)
+# Terminal 1: bun run dev
+# Terminal 2: bun run electron:dev
 ```
 
-`NO_STRIP=true` is required because Fedora's libraries use `.relr.dyn` sections that linuxdeploy's bundled `strip` can't handle. `APPIMAGE_EXTRACT_AND_RUN=1` is set in the Containerfile (needed because the container has no FUSE).
+**IMPORTANT:** `bun run build` only compiles to `dist/` and `dist-electron/`. The user runs the packaged AppImage/unpacked app from `release/`, so you **must** run `bun run package` (which builds AND repackages) for changes to take effect.
 
 Build outputs:
-- `src-tauri/target/release/bundle/appimage/crabbit_<version>_amd64.AppImage`
-- `src-tauri/target/release/bundle/deb/crabbit_<version>_amd64.deb`
-- `src-tauri/target/release/bundle/rpm/crabbit-<version>-1.x86_64.rpm`
+- `release/Crabbit-<version>.AppImage`
+- `release/linux-unpacked/` (unpacked app)
 
 ## Architecture
 
-**Core principle:** Rust does all fetching, parsing, and classification. Frontend is a display layer that calls `invoke('fetch_posts')` and renders `MediaPost[]` data.
+**Core principle:** Electron main process (TypeScript) does all fetching, parsing, and classification. Frontend is a display layer that calls `invoke('fetch_posts')` via Electron IPC and renders `MediaPost[]` data.
 
-### Rust Backend (`src-tauri/src/`)
+### Electron Backend (`src-electron/`)
 
-- `lib.rs` — Tauri setup, AppState (reqwest client, favorites), command registration
-- `reddit/client.rs` — HTTP client, URL construction, `fetch_listing()`
-- `reddit/parser.rs` — Post classification (13-step priority) + media URL extraction
-- `reddit/types.rs` — `MediaPost`, `MediaItem`, `FetchResult`, `FetchParams`
-- `favorites.rs` — Read/write favorites JSON in Tauri app data dir
+- `main.ts` — Electron setup, BrowserWindow, IPC handlers, protocol registration, app state
+- `preload.ts` — contextBridge exposing `invoke()` to renderer
+- `reddit/client.ts` — HTTP client, `fetchPosts()`, RedGifs resolution
+- `reddit/parser.ts` — Post classification (13-step priority) + media URL extraction
+- `reddit/types.ts` — `MediaPost`, `MediaItem`, `FetchResult`, `FetchParams`
+- `video-cache.ts` — In-memory LRU cache, localhost HTTP server with Range support, `preloadVideo()`
+- `favorites.ts` — Read/write favorites JSON
+- `config.ts` — Config read/write, save path resolution
+- `saved.ts` — Save/delete/list posts with media files
 
-Tauri commands: `fetch_posts`, `get_favorites`, `add_favorite`, `remove_favorite`
+IPC commands: `fetch_posts`, `get_favorites`, `add_favorite`, `remove_favorite`, `preload_video`, `get_video_server_port`, `save_post`, `get_saved_posts`, `delete_saved_post`, `is_post_saved`, `get_save_path`, `set_save_path`, `open_save_folder`, `show_open_dialog`, `log_frontend`, `toggle_devtools`, `dump_video_cache`
 
 ### Frontend (`src/`)
 
+- `invoke.ts` — Electron IPC bridge (drop-in replacement for Tauri's invoke)
 - `state/` — `useReducer` + Context (`AppState`, `AppDispatch`)
-- `hooks/` — `useReddit` (fetch/paginate), `useSlideshow` (timer/prefetch/preload), `useKeyboard` (shortcuts)
-- `components/` — `SubredditBar`, `SlideshowView`, `MediaDisplay`, `ImageSlide`, `VideoSlide`, `GallerySlide`, `EmbedSlide`, `PostOverlay`, `ControlBar`, `LoadingSpinner`, `ErrorDisplay`
+- `hooks/` — `useReddit` (fetch/paginate), `useSlideshow` (timer/prefetch/preload), `useKeyboard` (shortcuts), `useSavedPosts`, `useIdleHide`
+- `components/` — `SubredditBar`, `SlideshowView`, `MediaDisplay`, `ImageSlide`, `VideoSlide`, `GallerySlide`, `EmbedSlide`, `PostOverlay`, `ControlBar`, `LoadingSpinner`, `ErrorDisplay`, `Notification`
+
+### Video Playback
+
+Electron uses Chromium, so HTML5 `<video>` works on all platforms including Linux. No more WebKitGTK/GStreamer issues, no mpv overlay, no WebView reload workaround.
+
+- Videos are preloaded and cached in-memory (LRU, 50 entries max)
+- A localhost HTTP server serves cached bytes with Range request support
+- Frontend sets `<video src="http://127.0.0.1:{port}/{cacheKey}">`
+- Saved media files are served via `saved-media://` custom protocol
+
+### Legacy Tauri Code (`src-tauri/`)
+
+The old Tauri/Rust backend is preserved in `src-tauri/` for reference. It is no longer used.
 
 ## Reddit API Notes
 
@@ -74,7 +98,6 @@ Tauri commands: `fetch_posts`, `get_favorites`, `add_favorite`, `remove_favorite
 - v.redd.it audio is a separate stream: `DASH_AUDIO_128.mp4` (not all videos have audio)
 - Gallery ordering comes from `gallery_data.items`, not `media_metadata` keys
 - `post_hint` is unreliable — always fall back to URL/domain checks
-- Use `serde_json::Value` for `media`/`preview`/`media_metadata` — Reddit's structures are too inconsistent for full typing
 
 ## Keyboard Shortcuts
 
@@ -82,10 +105,10 @@ Arrow keys (nav/gallery), Space (play/pause), T (overlay), F (fullscreen), M (mu
 
 ## Workflow
 
-Always rebuild at the end of any code changes: `NO_STRIP=true bun tauri build`. This runs vite build automatically (via `beforeBuildCommand`), then compiles the Rust binary and produces AppImage/deb/rpm bundles. **NEVER use `cargo build` directly** — it compiles the Rust binary but does not embed the latest frontend assets.
+Always repackage at the end of any code changes: `bun run package`. This builds the Vite frontend, compiles the Electron main process, and repackages into the AppImage/unpacked app that the user actually runs.
 
-Features must be working when the user tests them. Do not rely on native browser/webview behavior for styling — Tauri's WebView may not respect CSS on native form elements like `<select>`/`<option>`. Use custom components with styled divs/buttons instead. When unsure if something will render correctly, prefer fully controlled custom components over native elements.
+Features must be working when the user tests them. Electron uses Chromium so standard CSS and HTML5 video work as expected.
 
 ## Testing
 
-Test subs: `r/earthporn` (images), `r/oddlysatisfying` (v.redd.it video), `r/houseplants` (galleries), `r/earthporn+spaceporn` (multi). Check YouTube/redgifs embeds load in iframes. Verify CSP doesn't block media domains.
+Test subs: `r/earthporn` (images), `r/oddlysatisfying` (v.redd.it video), `r/houseplants` (galleries), `r/earthporn+spaceporn` (multi). Check YouTube/redgifs embeds load in iframes. Verify video playback works without issues on Linux.

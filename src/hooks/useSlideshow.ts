@@ -1,5 +1,5 @@
 import { useEffect, useContext, useCallback, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../invoke";
 import { AppStateContext, AppDispatchContext } from "../state/context";
 import { useReddit } from "./useReddit";
 
