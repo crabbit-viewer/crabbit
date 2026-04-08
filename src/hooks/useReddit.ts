@@ -1,7 +1,7 @@
 import { useCallback, useContext } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../invoke";
+import { fetchPosts as fetchRedditPosts } from "../reddit/client";
 import { AppDispatchContext, AppStateContext } from "../state/context";
-import { FetchResult } from "../types";
 
 export function useReddit() {
   const state = useContext(AppStateContext);
@@ -16,15 +16,25 @@ export function useReddit() {
       dispatch({ type: "SET_ERROR", payload: null });
 
       try {
-        const result = await invoke<FetchResult>("fetch_posts", {
-          params: {
+        // Fetch directly from the renderer using Chromium's fetch().
+        // This bypasses Cloudflare bot detection that blocks Node.js requests.
+        const [result, ignored] = await Promise.all([
+          fetchRedditPosts({
             subreddit: sub,
             sort: state.sort,
             time_range: state.timeRange,
             after: append ? state.after : null,
             limit: 50,
-          },
-        });
+          }),
+          invoke<string[]>("get_ignored_users").catch(() => [] as string[]),
+        ]);
+
+        if (ignored.length > 0) {
+          const ignoredSet = new Set(ignored.map((u) => u.toLowerCase()));
+          result.posts = result.posts.filter(
+            (p) => !ignoredSet.has(p.author.toLowerCase())
+          );
+        }
 
         if (append) {
           dispatch({ type: "APPEND_POSTS", payload: result });

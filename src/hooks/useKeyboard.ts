@@ -1,5 +1,5 @@
 import { useEffect, useContext, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../invoke";
 import { AppStateContext, AppDispatchContext } from "../state/context";
 
 export function useKeyboard(
@@ -88,6 +88,15 @@ export function useKeyboard(
             document.exitFullscreen();
           }
           break;
+        case "r":
+        case "R": {
+          if (!currentPost?.permalink) break;
+          const redditUrl = currentPost.permalink.startsWith("http")
+            ? currentPost.permalink
+            : `https://www.reddit.com${currentPost.permalink}`;
+          window.open(redditUrl, "_blank");
+          break;
+        }
         case "`":
           invoke("dump_video_cache").then((paths) => {
             console.log("[dump]", paths);

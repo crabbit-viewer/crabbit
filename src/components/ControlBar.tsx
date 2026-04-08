@@ -1,5 +1,5 @@
 import { useContext, useCallback, useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../invoke";
 import { AppStateContext, AppDispatchContext } from "../state/context";
 
 interface Props {
@@ -37,6 +37,17 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, uiV
       .then((saved) => dispatch({ type: "SET_CURRENT_POST_SAVED", payload: saved }))
       .catch(() => {});
   }, [currentPost?.id, isSavedMode, dispatch]);
+
+  const ignoreUser = useCallback(async () => {
+    if (!currentPost || !currentPost.author) return;
+    const author = currentPost.author;
+    await invoke("add_ignored_user", { username: author });
+    dispatch({ type: "REMOVE_POSTS_BY_AUTHOR", payload: author });
+    dispatch({
+      type: "SET_NOTIFICATION",
+      payload: { message: `Ignored u/${author}`, type: "success" },
+    });
+  }, [currentPost, dispatch]);
 
   const toggleFavorite = useCallback(async () => {
     if (!currentPost) return;
@@ -88,6 +99,21 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, uiV
       </span>
 
       <button
+        onClick={() => {
+          if (currentPost?.permalink) {
+            const url = currentPost.permalink.startsWith("http")
+              ? currentPost.permalink
+              : `https://www.reddit.com${currentPost.permalink}`;
+            window.open(url, "_blank");
+          }
+        }}
+        className="icon-btn"
+        title="Open on Reddit (R)"
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.673 2.142-.766 3.556h3.936c-.093-1.414-.377-2.649-.766-3.556-.24-.56-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.093 1.414.377 2.649.766 3.556.24.56.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.497-.623.737-1.182.389-.907.673-2.142.766-3.556zm1.166 4.118c.454-1.147.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.03 11H4.083a6.004 6.004 0 002.783 4.118z" clipRule="evenodd"/></svg>
+      </button>
+
+      <button
         onClick={() => dispatch({ type: "TOGGLE_MUTE" })}
         className={`icon-btn ${state.isMuted ? "active" : ""}`}
         title="Mute (M)"
@@ -116,6 +142,13 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, uiV
             disabled={isEmbed}
           >
             <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"/></svg>
+          </button>
+          <button
+            onClick={ignoreUser}
+            className="icon-btn"
+            title="Ignore user"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" fillRule="evenodd" clipRule="evenodd"/></svg>
           </button>
           <button
             onClick={toggleFavorite}
