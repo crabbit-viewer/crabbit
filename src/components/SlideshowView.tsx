@@ -11,13 +11,19 @@ interface Props {
   onNext: () => void;
   onPrev: () => void;
   onTogglePlay: () => void;
+  onRotate: () => void;
+  rotation: number;
   uiVisible: boolean;
 }
 
-export function SlideshowView({ onNext, onPrev, onTogglePlay, uiVisible }: Props) {
+export function SlideshowView({ onNext, onPrev, onTogglePlay, onRotate, rotation, uiVisible }: Props) {
   const state = useContext(AppStateContext);
   const { saveCurrentPost, deleteCurrentPost } = useSavedPosts();
   const currentPost = state.posts[state.currentIndex];
+
+  const isVideo =
+    currentPost?.media_type === "video" ||
+    currentPost?.media_type === "animated_gif";
 
   if (!currentPost) {
     if (state.viewMode === "saved") {
@@ -40,7 +46,7 @@ export function SlideshowView({ onNext, onPrev, onTogglePlay, uiVisible }: Props
 
   return (
     <div className="relative w-full h-full">
-      <MediaDisplay post={currentPost} />
+      <MediaDisplay post={currentPost} rotation={rotation} />
       <SubredditBar uiVisible={uiVisible} />
       <PostOverlay post={currentPost} visible={state.showOverlay} uiVisible={uiVisible} />
       <ControlBar
@@ -49,6 +55,8 @@ export function SlideshowView({ onNext, onPrev, onTogglePlay, uiVisible }: Props
         onTogglePlay={onTogglePlay}
         onSave={saveCurrentPost}
         onDelete={state.viewMode === "saved" ? deleteCurrentPost : undefined}
+        onRotate={onRotate}
+        showRotate={isVideo}
         uiVisible={uiVisible}
       />
     </div>

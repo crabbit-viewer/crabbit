@@ -101,7 +101,7 @@ The old Tauri/Rust backend is preserved in `src-tauri/` for reference. It is no 
 
 ## Keyboard Shortcuts
 
-Arrow keys (nav/gallery), Space (play/pause), T (overlay), F (fullscreen), M (mute), Escape (exit fullscreen)
+Arrow keys (nav/gallery), Space (play/pause), T (overlay), F (fullscreen), M (mute), R (rotate video 90° CCW, ephemeral), I (open on Reddit), Escape (exit fullscreen)
 
 ## Workflow
 

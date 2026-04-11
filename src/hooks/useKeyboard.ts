@@ -6,7 +6,8 @@ export function useKeyboard(
   next: () => void,
   prev: () => void,
   togglePlay: () => void,
-  savePost: () => void
+  savePost: () => void,
+  rotate: () => void
 ) {
   const state = useContext(AppStateContext);
   const dispatch = useContext(AppDispatchContext);
@@ -89,7 +90,11 @@ export function useKeyboard(
           }
           break;
         case "r":
-        case "R": {
+        case "R":
+          rotate();
+          break;
+        case "i":
+        case "I": {
           if (!currentPost?.permalink) break;
           const redditUrl = currentPost.permalink.startsWith("http")
             ? currentPost.permalink
@@ -109,7 +114,7 @@ export function useKeyboard(
           break;
       }
     },
-    [next, prev, togglePlay, savePost, dispatch, currentPost, state.galleryIndex, state.volume]
+    [next, prev, togglePlay, savePost, rotate, dispatch, currentPost, state.galleryIndex, state.volume]
   );
 
   useEffect(() => {

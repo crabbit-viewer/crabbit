@@ -255,6 +255,75 @@ function setupIPC(): void {
       mainWindow.webContents.openDevTools();
     }
   });
+
+  ipcMain.handle("reddit_login", async () => {
+    return new Promise<boolean>((resolve) => {
+      const loginWindow = new BrowserWindow({
+        width: 500,
+        height: 700,
+        parent: mainWindow ?? undefined,
+        modal: false,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+        },
+      });
+
+      loginWindow.setMenuBarVisibility(false);
+
+      let resolved = false;
+      const done = (result: boolean) => {
+        if (resolved) return;
+        resolved = true;
+        if (!loginWindow.isDestroyed()) loginWindow.close();
+        resolve(result);
+      };
+
+      // After login, Reddit redirects away from /login/ — use that as the signal.
+      const checkLogin = async (_event: any, url: string) => {
+        const parsed = new URL(url);
+        if (
+          parsed.hostname.endsWith("reddit.com") &&
+          !parsed.pathname.startsWith("/login") &&
+          !parsed.pathname.startsWith("/register") &&
+          !parsed.pathname.startsWith("/account/login")
+        ) {
+          console.error(`[reddit_login] Redirected to ${url}, login successful`);
+          done(true);
+        }
+      };
+
+      loginWindow.webContents.on("did-navigate", checkLogin);
+      loginWindow.webContents.on("did-navigate-in-page", checkLogin);
+
+      loginWindow.on("closed", () => done(false));
+
+      loginWindow.loadURL("https://www.reddit.com/login/");
+    });
+  });
+
+  ipcMain.handle("reddit_logout", async () => {
+    const cookies = await session.defaultSession.cookies.get({
+      domain: ".reddit.com",
+    });
+    for (const cookie of cookies) {
+      const url = `https://${cookie.domain?.replace(/^\./, "")}${cookie.path}`;
+      await session.defaultSession.cookies.remove(url, cookie.name);
+    }
+    console.error("[reddit_logout] Cleared Reddit cookies");
+  });
+
+  ipcMain.handle("reddit_check_login", async () => {
+    try {
+      const cookies = await session.defaultSession.cookies.get({
+        domain: ".reddit.com",
+      });
+      // reddit_session is only set after actual login (token_v2 exists for anonymous visitors too)
+      return cookies.some((c) => c.name === "reddit_session");
+    } catch {
+      return false;
+    }
+  });
 }
 
 function setupSavedMediaProtocol(): void {

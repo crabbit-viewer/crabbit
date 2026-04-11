@@ -18,7 +18,7 @@ export function GallerySlide({ items }: Props) {
       <img
         src={item.url}
         alt=""
-        className="max-w-full max-h-[calc(100%-3rem)] object-contain"
+        className="w-full h-[calc(100%-3rem)] object-contain"
         draggable={false}
       />
       {item.caption && (

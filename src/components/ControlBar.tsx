@@ -8,10 +8,12 @@ interface Props {
   onTogglePlay: () => void;
   onSave: () => void;
   onDelete?: () => void;
+  onRotate: () => void;
+  showRotate: boolean;
   uiVisible: boolean;
 }
 
-export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, uiVisible }: Props) {
+export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, onRotate, showRotate, uiVisible }: Props) {
   const state = useContext(AppStateContext);
   const dispatch = useContext(AppDispatchContext);
   const [isFavorite, setIsFavorite] = useState(false);
@@ -108,10 +110,20 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, uiV
           }
         }}
         className="icon-btn"
-        title="Open on Reddit (R)"
+        title="Open on Reddit (I)"
       >
         <svg viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.673 2.142-.766 3.556h3.936c-.093-1.414-.377-2.649-.766-3.556-.24-.56-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.093 1.414.377 2.649.766 3.556.24.56.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.497-.623.737-1.182.389-.907.673-2.142.766-3.556zm1.166 4.118c.454-1.147.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.03 11H4.083a6.004 6.004 0 002.783 4.118z" clipRule="evenodd"/></svg>
       </button>
+
+      {showRotate && (
+        <button
+          onClick={onRotate}
+          className="icon-btn"
+          title="Rotate video 90° counter-clockwise (R)"
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.793 2.232a1 1 0 010 1.415L6.44 5H11a6 6 0 016 6v1a1 1 0 11-2 0v-1a4 4 0 00-4-4H6.44l1.353 1.354a1 1 0 11-1.415 1.414L3.025 6.414a1 1 0 010-1.414l3.353-3.354a1 1 0 011.415 0zM4 12a1 1 0 011 1v4a1 1 0 11-2 0v-4a1 1 0 011-1z" clipRule="evenodd"/></svg>
+        </button>
+      )}
 
       <button
         onClick={() => dispatch({ type: "TOGGLE_MUTE" })}

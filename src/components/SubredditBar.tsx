@@ -261,6 +261,27 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
       )}
 
       <div className="relative ml-auto flex items-center gap-1">
+        <button
+          onClick={async () => {
+            if (state.isLoggedIn) {
+              await invoke("reddit_logout");
+              dispatch({ type: "SET_LOGGED_IN", payload: false });
+            } else {
+              const ok = await invoke<boolean>("reddit_login");
+              if (ok) dispatch({ type: "SET_LOGGED_IN", payload: true });
+            }
+          }}
+          className="icon-btn"
+          title={state.isLoggedIn ? "Logged in — click to log out" : "Log in to Reddit"}
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+          </svg>
+          {state.isLoggedIn && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-400 rounded-full" />
+          )}
+        </button>
+
         <SubredditAnalyzer onOpen={() => { setShowFavs(false); setShowIgnored(false); }} />
 
         <button
