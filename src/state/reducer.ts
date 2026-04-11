@@ -31,6 +31,7 @@ export interface AppState {
   previousView: PreviousView | null;
   notification: Notification | null;
   currentPostSaved: boolean;
+  isLoggedIn: boolean;
 }
 
 const defaultState: AppState = {
@@ -52,6 +53,7 @@ const defaultState: AppState = {
   previousView: null,
   notification: null,
   currentPostSaved: false,
+  isLoggedIn: false,
 };
 
 export const initialState: AppState = defaultState;
@@ -81,7 +83,8 @@ export type AppAction =
   | { type: "SET_CURRENT_POST_SAVED"; payload: boolean }
   | { type: "ENTER_SAVED_VIEW"; payload: { posts: MediaPost[] } }
   | { type: "EXIT_SAVED_VIEW" }
-  | { type: "REMOVE_POSTS_BY_AUTHOR"; payload: string };
+  | { type: "REMOVE_POSTS_BY_AUTHOR"; payload: string }
+  | { type: "SET_LOGGED_IN"; payload: boolean };
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -187,6 +190,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const newIndex = Math.min(state.currentIndex, Math.max(0, filtered.length - 1));
       return { ...state, posts: filtered, currentIndex: newIndex, galleryIndex: 0 };
     }
+    case "SET_LOGGED_IN":
+      return { ...state, isLoggedIn: action.payload };
     default:
       return state;
   }

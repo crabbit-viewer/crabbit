@@ -10,7 +10,7 @@ export function ImageSlide({ item }: Props) {
       <img
         src={item.url}
         alt=""
-        className="max-w-full max-h-full object-contain"
+        className="w-full h-full object-contain"
         draggable={false}
       />
     </div>

@@ -2,6 +2,7 @@ import { useCallback, useContext } from "react";
 import { invoke } from "../invoke";
 import { fetchPosts as fetchRedditPosts } from "../reddit/client";
 import { AppDispatchContext, AppStateContext } from "../state/context";
+import type { FetchResult } from "../types";
 
 export function useReddit() {
   const state = useContext(AppStateContext);
@@ -16,16 +17,20 @@ export function useReddit() {
       dispatch({ type: "SET_ERROR", payload: null });
 
       try {
-        // Fetch directly from the renderer using Chromium's fetch().
-        // This bypasses Cloudflare bot detection that blocks Node.js requests.
+        const params = {
+          subreddit: sub,
+          sort: state.sort,
+          time_range: state.timeRange,
+          after: append ? state.after : null,
+          limit: 50,
+        };
+
+        // When logged in, fetch via main process (net.fetch includes session cookies).
+        // When not logged in, fetch from renderer (bypasses Cloudflare bot detection).
         const [result, ignored] = await Promise.all([
-          fetchRedditPosts({
-            subreddit: sub,
-            sort: state.sort,
-            time_range: state.timeRange,
-            after: append ? state.after : null,
-            limit: 50,
-          }),
+          state.isLoggedIn
+            ? invoke<FetchResult>("fetch_posts", { params })
+            : fetchRedditPosts(params),
           invoke<string[]>("get_ignored_users").catch(() => [] as string[]),
         ]);
 
@@ -53,7 +58,7 @@ export function useReddit() {
         dispatch({ type: "SET_LOADING", payload: false });
       }
     },
-    [state.subreddit, state.sort, state.timeRange, state.after, dispatch]
+    [state.subreddit, state.sort, state.timeRange, state.after, state.isLoggedIn, dispatch]
   );
 
   return { fetchPosts };

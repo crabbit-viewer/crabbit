@@ -7,6 +7,7 @@ interface Props {
   item: MediaItem;
   audioUrl: string | null;
   isGif: boolean;
+  rotation: number;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   audioRef: React.RefObject<HTMLAudioElement | null>;
 }
@@ -19,7 +20,7 @@ async function getServerPort(): Promise<number> {
   return cachedPort;
 }
 
-export function VideoSlide({ item, audioUrl, isGif, videoRef, audioRef }: Props) {
+export function VideoSlide({ item, audioUrl, isGif, rotation, videoRef, audioRef }: Props) {
   const { isMuted, volume } = useContext(AppStateContext);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -129,9 +130,9 @@ export function VideoSlide({ item, audioUrl, isGif, videoRef, audioRef }: Props)
     video.autoplay = true;
     video.loop = true;
     video.playsInline = true;
-    video.controls = !isGif;
+    video.controls = !isGif && rotation === 0;
     video.muted = isGif || (!!audioUrl ? true : isMuted);
-  }, [isGif, audioUrl, isMuted, ready]);
+  }, [isGif, audioUrl, isMuted, ready, rotation]);
 
   if (loading) {
     return (

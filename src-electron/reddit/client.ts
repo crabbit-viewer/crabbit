@@ -1,4 +1,4 @@
-import { net } from "electron";
+import { net, session } from "electron";
 import { parseListing } from "./parser";
 import type { FetchParams, FetchResult, MediaPost, MediaType } from "./types";
 
@@ -48,6 +48,11 @@ async function fetchListing(
   if (sort === "top" || sort === "controversial") {
     url += `&t=${timeRange}`;
   }
+
+  // Log cookie count for debugging auth issues
+  const cookies = await session.defaultSession.cookies.get({ domain: ".reddit.com" });
+  const authCookies = cookies.filter((c) => c.name === "reddit_session" || c.name === "token_v2");
+  console.error(`[fetch_listing] ${authCookies.length} auth cookies, ${cookies.length} total reddit cookies`);
 
   const response = await net.fetch(url, {
     headers: { "User-Agent": USER_AGENT },
