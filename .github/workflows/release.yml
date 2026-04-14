@@ -31,15 +31,15 @@ jobs:
 
       - name: Package (Linux)
         if: matrix.platform == 'ubuntu-22.04'
-        run: npx electron-builder --linux
+        run: npx electron-builder --linux --publish never
 
       - name: Package (Windows)
         if: matrix.platform == 'windows-latest'
-        run: npx electron-builder --win
+        run: npx electron-builder --win --publish never
 
       - name: Package (macOS)
         if: matrix.platform == 'macos-latest'
-        run: npx electron-builder --mac
+        run: npx electron-builder --mac --publish never
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
