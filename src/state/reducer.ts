@@ -28,6 +28,7 @@ export interface AppState {
   isMuted: boolean;
   volume: number;
   viewMode: "slideshow" | "saved";
+  savedDisplayMode: "grid" | "slideshow";
   previousView: PreviousView | null;
   notification: Notification | null;
   currentPostSaved: boolean;
@@ -50,6 +51,7 @@ const defaultState: AppState = {
   isMuted: false,
   volume: 100,
   viewMode: "slideshow",
+  savedDisplayMode: "grid",
   previousView: null,
   notification: null,
   currentPostSaved: false,
@@ -79,6 +81,7 @@ export type AppAction =
   | { type: "TOGGLE_MUTE" }
   | { type: "SET_VOLUME"; payload: number }
   | { type: "SET_VIEW_MODE"; payload: "slideshow" | "saved" }
+  | { type: "SET_SAVED_DISPLAY_MODE"; payload: "grid" | "slideshow" }
   | { type: "SET_NOTIFICATION"; payload: Notification | null }
   | { type: "SET_CURRENT_POST_SAVED"; payload: boolean }
   | { type: "ENTER_SAVED_VIEW"; payload: { posts: MediaPost[] } }
@@ -147,6 +150,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, volume: Math.max(0, Math.min(100, action.payload)) };
     case "SET_VIEW_MODE":
       return { ...state, viewMode: action.payload };
+    case "SET_SAVED_DISPLAY_MODE":
+      return { ...state, savedDisplayMode: action.payload };
     case "SET_NOTIFICATION":
       return { ...state, notification: action.payload };
     case "SET_CURRENT_POST_SAVED":
@@ -165,6 +170,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         galleryIndex: 0,
         after: null,
         viewMode: "saved",
+        savedDisplayMode: "grid",
         isPlaying: false,
       };
     case "EXIT_SAVED_VIEW": {
@@ -179,6 +185,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         subreddit: state.previousView.subreddit,
         previousView: null,
         viewMode: "slideshow",
+        savedDisplayMode: "grid",
         galleryIndex: 0,
       };
     }

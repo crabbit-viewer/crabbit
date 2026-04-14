@@ -146,13 +146,22 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, onR
       </button>
 
       {isSavedMode && onDelete ? (
-        <button
-          onClick={onDelete}
-          className="icon-btn hover:!text-red-400"
-          title="Delete saved post"
-        >
-          <svg viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
-        </button>
+        <>
+          <button
+            onClick={browseUser}
+            className="icon-btn"
+            title={`Browse u/${currentPost?.author ?? ""}`}
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" fillRule="evenodd" clipRule="evenodd"/><path d="M15.5 9.5l2.5 2.5m0-2.5l-2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/></svg>
+          </button>
+          <button
+            onClick={onDelete}
+            className="icon-btn hover:!text-red-400"
+            title="Delete saved post"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
+          </button>
+        </>
       ) : (
         <>
           <button

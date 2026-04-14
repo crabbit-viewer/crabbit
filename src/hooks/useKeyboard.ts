@@ -87,6 +87,8 @@ export function useKeyboard(
         case "Escape":
           if (document.fullscreenElement) {
             document.exitFullscreen();
+          } else if (state.viewMode === "saved" && state.savedDisplayMode === "slideshow") {
+            dispatch({ type: "SET_SAVED_DISPLAY_MODE", payload: "grid" });
           }
           break;
         case "r":
@@ -114,7 +116,7 @@ export function useKeyboard(
           break;
       }
     },
-    [next, prev, togglePlay, savePost, rotate, dispatch, currentPost, state.galleryIndex, state.volume]
+    [next, prev, togglePlay, savePost, rotate, dispatch, currentPost, state.galleryIndex, state.volume, state.viewMode, state.savedDisplayMode]
   );
 
   useEffect(() => {

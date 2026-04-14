@@ -5,6 +5,7 @@ import { ControlBar } from "./ControlBar";
 import { SubredditBar } from "./SubredditBar";
 import { useSavedPosts } from "../hooks/useSavedPosts";
 import { HomePage } from "./HomePage";
+import { SavedGridView } from "./SavedGridView";
 
 interface Props {
   onNext: () => void;
@@ -23,6 +24,15 @@ export function SlideshowView({ onNext, onPrev, onTogglePlay, onRotate, rotation
   const isVideo =
     currentPost?.media_type === "video" ||
     currentPost?.media_type === "animated_gif";
+
+  if (state.viewMode === "saved" && state.savedDisplayMode === "grid") {
+    return (
+      <>
+        <SubredditBar uiVisible={true} />
+        <SavedGridView />
+      </>
+    );
+  }
 
   if (!currentPost) {
     if (state.viewMode === "saved") {

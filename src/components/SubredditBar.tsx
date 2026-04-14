@@ -193,6 +193,27 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
         <div className="w-px h-4 bg-white/10" />
         <span className="text-blue-400 text-xs">Saved</span>
         <button
+          onClick={() => dispatch({
+            type: "SET_SAVED_DISPLAY_MODE",
+            payload: state.savedDisplayMode === "grid" ? "slideshow" : "grid",
+          })}
+          className="icon-btn text-white/40 hover:text-white transition-colors"
+          title={state.savedDisplayMode === "grid" ? "Slideshow view" : "Grid view"}
+        >
+          {state.savedDisplayMode === "grid" ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+          )}
+        </button>
+        <button
           onClick={exitSavedView}
           className="text-white/40 hover:text-white text-xs ml-auto transition-colors"
         >
