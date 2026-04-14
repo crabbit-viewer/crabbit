@@ -6,8 +6,6 @@ directories:
 files:
   - dist/**/*
   - dist-electron/**/*
-  - "!node_modules/**/*"
-  - node_modules/electron/**/*
 asar: true
 
 publish:
