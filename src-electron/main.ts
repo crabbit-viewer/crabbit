@@ -7,6 +7,7 @@ import {
   shell,
   dialog,
 } from "electron";
+import { autoUpdater } from "electron-updater";
 import * as path from "path";
 import * as fs from "fs";
 import { fetchPosts } from "./reddit/client";
@@ -423,6 +424,12 @@ app.whenReady().then(async () => {
 
   // Create window
   createWindow();
+
+  // Check for updates (non-blocking, silent on no update)
+  autoUpdater.logger = null;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.checkForUpdatesAndNotify();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

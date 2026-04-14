@@ -10,11 +10,12 @@ files:
   - node_modules/electron/**/*
 asar: true
 
+publish:
+  provider: github
+
 linux:
   target:
     - AppImage
-    - deb
-    - rpm
   category: Network
   icon: build/icon.png
 

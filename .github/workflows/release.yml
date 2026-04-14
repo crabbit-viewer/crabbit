@@ -47,8 +47,7 @@ jobs:
           draft: true
           files: |
             release/*.AppImage
-            release/*.deb
-            release/*.rpm
+            release/*.yml
             release/*.exe
             release/*.dmg
         env:
