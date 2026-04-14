@@ -2,6 +2,7 @@
   "name": "crabbit",
   "version": "1.0.0",
   "description": "Reddit media slideshow viewer",
+  "author": "Maik <maik@crabbit.app>",
   "main": "dist-electron/main.js",
   "type": "commonjs",
   "scripts": {

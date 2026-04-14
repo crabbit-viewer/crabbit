@@ -1,6 +1,7 @@
 import { useContext, useCallback, useEffect, useState } from "react";
 import { invoke } from "../invoke";
 import { AppStateContext, AppDispatchContext } from "../state/context";
+import { useReddit } from "../hooks/useReddit";
 
 interface Props {
   onNext: () => void;
@@ -16,6 +17,7 @@ interface Props {
 export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, onRotate, showRotate, uiVisible }: Props) {
   const state = useContext(AppStateContext);
   const dispatch = useContext(AppDispatchContext);
+  const { fetchPosts } = useReddit();
   const [isFavorite, setIsFavorite] = useState(false);
 
   const currentPost = state.posts[state.currentIndex];
@@ -50,6 +52,12 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, onR
       payload: { message: `Ignored u/${author}`, type: "success" },
     });
   }, [currentPost, dispatch]);
+
+  const browseUser = useCallback(() => {
+    if (!currentPost?.author || currentPost.author === "[deleted]") return;
+    dispatch({ type: "SET_PLAYING", payload: false });
+    fetchPosts(`user/${currentPost.author}`);
+  }, [currentPost, dispatch, fetchPosts]);
 
   const toggleFavorite = useCallback(async () => {
     if (!currentPost) return;
@@ -161,6 +169,13 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, onR
             title="Ignore user"
           >
             <svg viewBox="0 0 20 20" fill="currentColor"><path d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" fillRule="evenodd" clipRule="evenodd"/></svg>
+          </button>
+          <button
+            onClick={browseUser}
+            className="icon-btn"
+            title={`Browse u/${currentPost?.author ?? ""}`}
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" fillRule="evenodd" clipRule="evenodd"/><path d="M15.5 9.5l2.5 2.5m0-2.5l-2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/></svg>
           </button>
           <button
             onClick={toggleFavorite}

@@ -130,6 +130,7 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
   const [ignoredUsers, setIgnoredUsers] = useState<string[]>([]);
   const [showIgnored, setShowIgnored] = useState(false);
 
+  const currentPost = state.posts[state.currentIndex] ?? null;
   const isSavedMode = state.viewMode === "saved";
   const chromeClass = `ui-chrome ui-top ${uiVisible ? "" : "ui-hidden"}`;
 
@@ -143,17 +144,21 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
       .catch(() => {});
   }, []);
 
+  const isUserBrowse = state.subreddit.startsWith("user/");
+
   useEffect(() => {
-    setInput(state.subreddit);
-  }, [state.subreddit]);
+    setInput(isUserBrowse ? state.subreddit.slice(5) : state.subreddit);
+  }, [state.subreddit, isUserBrowse]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const sub = input.trim();
-    if (sub) {
-      dispatch({ type: "SET_PLAYING", payload: false });
-      fetchPosts(sub);
+    let sub = input.trim();
+    if (!sub) return;
+    if (sub.startsWith("u/")) {
+      sub = `user/${sub.slice(2)}`;
     }
+    dispatch({ type: "SET_PLAYING", payload: false });
+    fetchPosts(sub);
   };
 
   const loadFavorite = (sub: string) => {
@@ -214,12 +219,12 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
       </button>
 
       <form onSubmit={handleSubmit} className="flex items-center gap-0">
-        <span className="text-white/25 text-xs">r/</span>
+        <span className="text-white/25 text-xs">{isUserBrowse ? "u/" : "r/"}</span>
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="subreddit"
+          placeholder="subreddit or u/user"
           className="bg-transparent text-white/80 text-xs w-36 outline-none border-b border-white/10 focus:border-blue-500/50 px-1 py-0.5 transition-colors placeholder:text-white/20"
         />
         <button
@@ -235,13 +240,22 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
 
       <Dropdown
         value={state.sort}
-        options={[
-          { value: "hot", label: "Hot" },
-          { value: "new", label: "New" },
-          { value: "top", label: "Top" },
-          { value: "rising", label: "Rising" },
-          { value: "controversial", label: "Controversial" },
-        ]}
+        options={
+          isUserBrowse
+            ? [
+                { value: "hot", label: "Hot" },
+                { value: "new", label: "New" },
+                { value: "top", label: "Top" },
+                { value: "controversial", label: "Controversial" },
+              ]
+            : [
+                { value: "hot", label: "Hot" },
+                { value: "new", label: "New" },
+                { value: "top", label: "Top" },
+                { value: "rising", label: "Rising" },
+                { value: "controversial", label: "Controversial" },
+              ]
+        }
         onChange={handleSortChange}
       />
 
@@ -258,6 +272,18 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
           ]}
           onChange={handleTimeChange}
         />
+      )}
+
+      {state.showOverlay && currentPost && (
+        <div className="flex items-center gap-2 ml-2 min-w-0 overflow-hidden">
+          <div className="w-px h-4 bg-white/10 flex-shrink-0" />
+          <p className="text-white/60 text-xs truncate max-w-[400px]" title={currentPost.title}>
+            {currentPost.title}
+          </p>
+          <span className="text-white/25 text-[10px] flex-shrink-0">
+            u/{currentPost.author} · {formatScore(currentPost.score)}
+          </span>
+        </div>
       )}
 
       <div className="relative ml-auto flex items-center gap-1">
@@ -373,4 +399,9 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
       </div>
     </div>
   );
+}
+
+function formatScore(score: number): string {
+  if (score >= 1000) return (score / 1000).toFixed(1) + "k";
+  return String(score);
 }

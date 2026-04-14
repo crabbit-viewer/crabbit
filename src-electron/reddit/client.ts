@@ -10,8 +10,9 @@ export async function fetchPosts(params: FetchParams): Promise<FetchResult> {
   const timeRange = params.time_range ?? "day";
   const limit = Math.min(params.limit ?? 25, 100);
 
+  const isUser = params.subreddit.startsWith("user/");
   console.error(
-    `[fetch_posts] r/${params.subreddit} sort=${sort} time=${timeRange} limit=${limit} after=${params.after ?? "null"}`
+    `[fetch_posts] ${isUser ? "u/" + params.subreddit.slice(5) : "r/" + params.subreddit} sort=${sort} time=${timeRange} limit=${limit} after=${params.after ?? "null"}`
   );
 
   const listing = await fetchListing(
@@ -39,7 +40,10 @@ async function fetchListing(
   after: string | undefined,
   limit: number
 ): Promise<any> {
-  let url = `https://www.reddit.com/r/${subreddit}/${sort}.json?limit=${limit}&raw_json=1`;
+  const base = subreddit.startsWith("user/")
+    ? `https://www.reddit.com/user/${subreddit.slice(5)}/submitted/${sort}.json`
+    : `https://www.reddit.com/r/${subreddit}/${sort}.json`;
+  let url = `${base}?limit=${limit}&raw_json=1`;
 
   if (after) {
     url += `&after=${after}`;

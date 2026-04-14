@@ -10,7 +10,10 @@ export async function fetchPosts(params: FetchParams): Promise<FetchResult> {
   const timeRange = params.time_range ?? "day";
   const limit = Math.min(params.limit ?? 25, 100);
 
-  let url = `https://www.reddit.com/r/${params.subreddit}/${sort}.json?limit=${limit}&raw_json=1`;
+  const base = params.subreddit.startsWith("user/")
+    ? `https://www.reddit.com/user/${params.subreddit.slice(5)}/submitted/${sort}.json`
+    : `https://www.reddit.com/r/${params.subreddit}/${sort}.json`;
+  let url = `${base}?limit=${limit}&raw_json=1`;
   if (params.after) url += `&after=${params.after}`;
   if (sort === "top" || sort === "controversial") url += `&t=${timeRange}`;
 

@@ -45,7 +45,7 @@ export function MediaDisplay({ post, rotation = 0 }: Props) {
     const boxH = w && h ? (isRotated ? w : h) : undefined;
     return (
       <>
-        <div ref={containerRef} className="flex items-center justify-center w-full h-full overflow-hidden">
+        <div ref={containerRef} className="flex items-center justify-center w-full h-full overflow-hidden pb-10">
           <video
             ref={videoRef}
             style={{
