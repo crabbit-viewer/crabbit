@@ -13,10 +13,15 @@ if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 
-# Check for uncommitted changes
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "Error: You have uncommitted changes. Commit first, then run this script."
-  exit 1
+# Strip the leading 'v' for package.json (v0.13.0 -> 0.13.0)
+SEMVER="${VERSION#v}"
+
+# Update package.json version to match the release tag
+CURRENT_VERSION=$(node -p "require('./package.json').version")
+if [ "$CURRENT_VERSION" != "$SEMVER" ]; then
+  npm version "$SEMVER" --no-git-tag-version
+  git add package.json
+  git commit -m "Bump version to $SEMVER"
 fi
 
 git tag "$VERSION"
