@@ -14,9 +14,8 @@ jobs:
       matrix:
         include:
           - platform: ubuntu-22.04
-            args: ''
           - platform: windows-latest
-            args: ''
+          - platform: macos-latest
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -24,24 +23,33 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
       - name: Install frontend dependencies
         run: bun install
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build
+        run: bun run build
+
+      - name: Package (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: npx electron-builder --linux
+
+      - name: Package (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: npx electron-builder --win
+
+      - name: Package (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: npx electron-builder --mac
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
+            release/*.exe
+            release/*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Crabbit ${{ github.ref_name }}'
-          releaseBody: 'Download the installer for your platform below.'
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
