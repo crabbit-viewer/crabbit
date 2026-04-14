@@ -1,7 +1,6 @@
 import { useContext } from "react";
 import { AppStateContext } from "../state/context";
 import { MediaDisplay } from "./MediaDisplay";
-import { PostOverlay } from "./PostOverlay";
 import { ControlBar } from "./ControlBar";
 import { SubredditBar } from "./SubredditBar";
 import { useSavedPosts } from "../hooks/useSavedPosts";
@@ -48,7 +47,6 @@ export function SlideshowView({ onNext, onPrev, onTogglePlay, onRotate, rotation
     <div className="relative w-full h-full">
       <MediaDisplay post={currentPost} rotation={rotation} />
       <SubredditBar uiVisible={uiVisible} />
-      <PostOverlay post={currentPost} visible={state.showOverlay} uiVisible={uiVisible} />
       <ControlBar
         onNext={onNext}
         onPrev={onPrev}
