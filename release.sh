@@ -17,9 +17,8 @@ fi
 SEMVER="${VERSION#v}"
 
 # Update package.json version to match the release tag
-CURRENT_VERSION=$(node -p "require('./package.json').version")
-if [ "$CURRENT_VERSION" != "$SEMVER" ]; then
-  npm version "$SEMVER" --no-git-tag-version
+sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$SEMVER\"/" package.json
+if ! git diff --quiet package.json; then
   git add package.json
   git commit -m "Bump version to $SEMVER"
 fi

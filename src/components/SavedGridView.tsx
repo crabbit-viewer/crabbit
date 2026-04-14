@@ -74,7 +74,7 @@ export function SavedGridView() {
 
   return (
     <div className="w-full h-full overflow-y-auto pt-12 pb-4 px-4">
-      <div className="grid grid-cols-4 xl:grid-cols-5 gap-3 max-w-[1600px] mx-auto">
+      <div className="grid grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1920px]:grid-cols-7 min-[2400px]:grid-cols-8 gap-3">
         {state.posts.map((post, index) => (
           <button
             key={post.id}
