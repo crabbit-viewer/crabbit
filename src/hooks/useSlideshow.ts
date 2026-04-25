@@ -58,9 +58,16 @@ export function useSlideshow() {
 
   useEffect(() => {
     const posts = postsRef.current;
-    for (let i = 1; i <= 3; i++) {
-      const post = posts[state.currentIndex + i];
-      if (!post) continue;
+    const filter = state.mediaFilter;
+    let preloaded = 0;
+    for (let i = state.currentIndex + 1; i < posts.length && preloaded < 3; i++) {
+      const post = posts[i];
+      if (filter !== "all") {
+        const isPhoto = post.media_type === "image" || post.media_type === "gallery";
+        const matches = filter === "photos" ? isPhoto : !isPhoto;
+        if (!matches) continue;
+      }
+      preloaded++;
       if (post.media_type === "image" && post.media[0]) {
         const img = new Image();
         img.src = post.media[0].url;
@@ -71,7 +78,7 @@ export function useSlideshow() {
         }
       }
     }
-  }, [state.currentIndex]);
+  }, [state.currentIndex, state.mediaFilter]);
 
   const next = useCallback(() => {
     dispatch({ type: "NEXT_SLIDE" });

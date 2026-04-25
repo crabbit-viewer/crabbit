@@ -1,4 +1,10 @@
-import { MediaPost, SortOption, TimeRange } from "../types";
+import { MediaFilter, MediaPost, MediaType, SortOption, TimeRange } from "../types";
+
+function matchesFilter(mediaType: MediaType, filter: MediaFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "photos") return mediaType === "image" || mediaType === "gallery";
+  return mediaType === "video" || mediaType === "animated_gif" || mediaType === "embed";
+}
 
 export interface Notification {
   message: string;
@@ -27,6 +33,7 @@ export interface AppState {
   galleryIndex: number;
   isMuted: boolean;
   volume: number;
+  mediaFilter: MediaFilter;
   viewMode: "slideshow" | "saved";
   savedDisplayMode: "grid" | "slideshow";
   previousView: PreviousView | null;
@@ -50,6 +57,7 @@ const defaultState: AppState = {
   galleryIndex: 0,
   isMuted: false,
   volume: 100,
+  mediaFilter: "all",
   viewMode: "slideshow",
   savedDisplayMode: "grid",
   previousView: null,
@@ -87,7 +95,8 @@ export type AppAction =
   | { type: "ENTER_SAVED_VIEW"; payload: { posts: MediaPost[] } }
   | { type: "EXIT_SAVED_VIEW" }
   | { type: "REMOVE_POSTS_BY_AUTHOR"; payload: string }
-  | { type: "SET_LOGGED_IN"; payload: boolean };
+  | { type: "SET_LOGGED_IN"; payload: boolean }
+  | { type: "SET_MEDIA_FILTER"; payload: MediaFilter };
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -110,12 +119,22 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         posts: [...state.posts, ...action.payload.posts],
         after: action.payload.after,
       };
-    case "NEXT_SLIDE":
-      if (state.currentIndex >= state.posts.length - 1) return state;
-      return { ...state, currentIndex: state.currentIndex + 1, galleryIndex: 0 };
-    case "PREV_SLIDE":
-      if (state.currentIndex <= 0) return state;
-      return { ...state, currentIndex: state.currentIndex - 1, galleryIndex: 0 };
+    case "NEXT_SLIDE": {
+      for (let i = state.currentIndex + 1; i < state.posts.length; i++) {
+        if (matchesFilter(state.posts[i].media_type, state.mediaFilter)) {
+          return { ...state, currentIndex: i, galleryIndex: 0 };
+        }
+      }
+      return state;
+    }
+    case "PREV_SLIDE": {
+      for (let i = state.currentIndex - 1; i >= 0; i--) {
+        if (matchesFilter(state.posts[i].media_type, state.mediaFilter)) {
+          return { ...state, currentIndex: i, galleryIndex: 0 };
+        }
+      }
+      return state;
+    }
     case "SET_INDEX":
       return { ...state, currentIndex: action.payload, galleryIndex: 0 };
     case "TOGGLE_PLAY":
@@ -199,6 +218,26 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     }
     case "SET_LOGGED_IN":
       return { ...state, isLoggedIn: action.payload };
+    case "SET_MEDIA_FILTER": {
+      const filter = action.payload;
+      if (filter === "all") {
+        return { ...state, mediaFilter: filter };
+      }
+      // Find the first matching post at or after current index
+      for (let i = state.currentIndex; i < state.posts.length; i++) {
+        if (matchesFilter(state.posts[i].media_type, filter)) {
+          return { ...state, mediaFilter: filter, currentIndex: i, galleryIndex: 0 };
+        }
+      }
+      // Try from the beginning
+      for (let i = 0; i < state.currentIndex; i++) {
+        if (matchesFilter(state.posts[i].media_type, filter)) {
+          return { ...state, mediaFilter: filter, currentIndex: i, galleryIndex: 0 };
+        }
+      }
+      // No matching posts, just set the filter
+      return { ...state, mediaFilter: filter };
+    }
     default:
       return state;
   }

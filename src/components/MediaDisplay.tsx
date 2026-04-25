@@ -4,13 +4,15 @@ import { ImageSlide } from "./ImageSlide";
 import { VideoSlide } from "./VideoSlide";
 import { GallerySlide } from "./GallerySlide";
 import { EmbedSlide } from "./EmbedSlide";
+import { ZoomPanState } from "../hooks/useZoomPan";
 
 interface Props {
   post: MediaPost;
   rotation?: number;
+  zoomPan?: ZoomPanState;
 }
 
-export function MediaDisplay({ post, rotation = 0 }: Props) {
+export function MediaDisplay({ post, rotation = 0, zoomPan }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,16 +45,28 @@ export function MediaDisplay({ post, rotation = 0 }: Props) {
     // distortion, achieving maximum fit for any orientation.
     const boxW = w && h ? (isRotated ? h : w) : undefined;
     const boxH = w && h ? (isRotated ? w : h) : undefined;
+    const zpScale = zoomPan?.scale ?? 1;
+    const zpTx = zoomPan?.translateX ?? 0;
+    const zpTy = zoomPan?.translateY ?? 0;
+
     return (
       <>
-        <div ref={containerRef} className="flex items-center justify-center w-full h-full overflow-hidden pb-10">
+        <div
+          ref={(el) => {
+            (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+            zoomPan?.setContainer(el);
+          }}
+          className="flex items-center justify-center w-full h-full overflow-hidden pb-10"
+          style={{ cursor: zoomPan?.cursor }}
+          onMouseDown={zoomPan?.onMouseDown}
+        >
           <video
             ref={videoRef}
             style={{
               width: boxW ? `${boxW}px` : "100%",
               height: boxH ? `${boxH}px` : "100%",
               objectFit: "contain",
-              transform: `rotate(${rotation}deg)`,
+              transform: `translate(${zpTx}px, ${zpTy}px) scale(${zpScale}) rotate(${rotation}deg)`,
               flexShrink: 0,
             }}
             playsInline
@@ -71,11 +85,33 @@ export function MediaDisplay({ post, rotation = 0 }: Props) {
     );
   }
 
+  if (post.media_type === "embed" && post.embed_url) {
+    return <EmbedSlide embedUrl={post.embed_url} />;
+  }
+
+  const zpScale = zoomPan?.scale ?? 1;
+  const zpTx = zoomPan?.translateX ?? 0;
+  const zpTy = zoomPan?.translateY ?? 0;
+
   return (
-    <>
-      {post.media_type === "image" && <ImageSlide item={post.media[0]} />}
-      {post.media_type === "gallery" && <GallerySlide items={post.media} />}
-      {post.media_type === "embed" && post.embed_url && <EmbedSlide embedUrl={post.embed_url} />}
-    </>
+    <div
+      ref={(el) => zoomPan?.setContainer(el)}
+      className="flex items-center justify-center w-full h-full overflow-hidden"
+      style={{ cursor: zoomPan?.cursor }}
+      onMouseDown={zoomPan?.onMouseDown}
+      onDoubleClick={zoomPan?.onDoubleClick}
+    >
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          transform: `translate(${zpTx}px, ${zpTy}px) scale(${zpScale})`,
+          transformOrigin: "center center",
+        }}
+      >
+        {post.media_type === "image" && <ImageSlide item={post.media[0]} />}
+        {post.media_type === "gallery" && <GallerySlide items={post.media} />}
+      </div>
+    </div>
   );
 }

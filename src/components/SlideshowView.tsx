@@ -6,6 +6,7 @@ import { SubredditBar } from "./SubredditBar";
 import { useSavedPosts } from "../hooks/useSavedPosts";
 import { HomePage } from "./HomePage";
 import { SavedGridView } from "./SavedGridView";
+import { ZoomPanState } from "../hooks/useZoomPan";
 
 interface Props {
   onNext: () => void;
@@ -14,9 +15,10 @@ interface Props {
   onRotate: () => void;
   rotation: number;
   uiVisible: boolean;
+  zoomPan?: ZoomPanState;
 }
 
-export function SlideshowView({ onNext, onPrev, onTogglePlay, onRotate, rotation, uiVisible }: Props) {
+export function SlideshowView({ onNext, onPrev, onTogglePlay, onRotate, rotation, uiVisible, zoomPan }: Props) {
   const state = useContext(AppStateContext);
   const { saveCurrentPost, deleteCurrentPost } = useSavedPosts();
   const currentPost = state.posts[state.currentIndex];
@@ -55,7 +57,7 @@ export function SlideshowView({ onNext, onPrev, onTogglePlay, onRotate, rotation
 
   return (
     <div className="relative w-full h-full">
-      <MediaDisplay post={currentPost} rotation={rotation} />
+      <MediaDisplay post={currentPost} rotation={rotation} zoomPan={zoomPan} />
       <SubredditBar uiVisible={uiVisible} />
       <ControlBar
         onNext={onNext}

@@ -10,6 +10,7 @@ import { useSlideshow } from "./hooks/useSlideshow";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { useSavedPosts } from "./hooks/useSavedPosts";
 import { useIdleHide } from "./hooks/useIdleHide";
+import { useZoomPan } from "./hooks/useZoomPan";
 
 function SlideshowContainer() {
   const state = useContext(AppStateContext);
@@ -18,12 +19,14 @@ function SlideshowContainer() {
   const [rotation, setRotation] = useState(0);
   const rotateCCW = () => setRotation((r) => r - 90);
 
+  const zoomPan = useZoomPan([state.currentIndex, state.galleryIndex]);
+
   // Reset rotation whenever the current slide changes.
   useEffect(() => {
     setRotation(0);
   }, [state.currentIndex]);
 
-  useKeyboard(next, prev, togglePlay, saveCurrentPost, rotateCCW);
+  useKeyboard(next, prev, togglePlay, saveCurrentPost, rotateCCW, zoomPan.resetZoom);
   const uiVisible = useIdleHide(2500);
 
   return (
@@ -34,6 +37,7 @@ function SlideshowContainer() {
       onRotate={rotateCCW}
       rotation={rotation}
       uiVisible={uiVisible}
+      zoomPan={zoomPan}
     />
   );
 }
@@ -50,7 +54,7 @@ export default function App() {
   return (
     <AppStateContext.Provider value={state}>
       <AppDispatchContext.Provider value={dispatch}>
-        <div className="w-screen h-screen bg-black overflow-hidden relative cursor-default">
+        <div className="w-screen h-screen bg-[var(--surface-0)] overflow-hidden relative cursor-default">
           <SlideshowContainer />
           {state.isLoading && <LoadingSpinner />}
           {state.error && <ErrorDisplay message={state.error} />}

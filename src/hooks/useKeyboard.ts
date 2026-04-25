@@ -7,7 +7,8 @@ export function useKeyboard(
   prev: () => void,
   togglePlay: () => void,
   savePost: () => void,
-  rotate: () => void
+  rotate: () => void,
+  resetZoom: () => void,
 ) {
   const state = useContext(AppStateContext);
   const dispatch = useContext(AppDispatchContext);
@@ -110,13 +111,16 @@ export function useKeyboard(
             alert(`Dumped ${(paths as string[]).length} videos to /tmp`);
           }).catch((e) => alert(`Dump failed: ${e}`));
           break;
+        case "0":
+          resetZoom();
+          break;
         case "F12":
           e.preventDefault();
           invoke("toggle_devtools").catch(() => {});
           break;
       }
     },
-    [next, prev, togglePlay, savePost, rotate, dispatch, currentPost, state.galleryIndex, state.volume, state.viewMode, state.savedDisplayMode]
+    [next, prev, togglePlay, savePost, rotate, resetZoom, dispatch, currentPost, state.galleryIndex, state.volume, state.viewMode, state.savedDisplayMode]
   );
 
   useEffect(() => {

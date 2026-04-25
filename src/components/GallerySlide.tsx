@@ -27,16 +27,20 @@ export function GallerySlide({ items }: Props) {
         </p>
       )}
       <div className="absolute bottom-4 flex gap-1.5 items-center">
-        {items.map((_, i) => (
-          <button
-            key={i}
-            className={`w-2 h-2 rounded-full transition-colors ${
-              i === galleryIndex ? "bg-white" : "bg-white/40"
-            }`}
-            onClick={() => dispatch({ type: "SET_GALLERY_INDEX", payload: i })}
-          />
-        ))}
-        <span className="text-white/60 text-xs ml-2">
+        {items.length <= 10 ? (
+          items.map((_, i) => (
+            <button
+              key={i}
+              className={`rounded-full transition-all duration-200 ${
+                i === galleryIndex
+                  ? "w-2.5 h-2.5 bg-white ring-2 ring-white/30"
+                  : "w-2 h-2 bg-white/40 hover:bg-white/60"
+              }`}
+              onClick={() => dispatch({ type: "SET_GALLERY_INDEX", payload: i })}
+            />
+          ))
+        ) : null}
+        <span className="text-white/60 text-xs ml-1 tabular-nums font-mono">
           {galleryIndex + 1}/{items.length}
         </span>
       </div>

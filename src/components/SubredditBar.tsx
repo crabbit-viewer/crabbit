@@ -1,11 +1,10 @@
-import { useState, useContext, useEffect, useRef, useCallback, FormEvent } from "react";
+import { useState, useContext, useEffect, useRef, useCallback, useMemo, FormEvent } from "react";
 import { invoke } from "../invoke";
 import { AppStateContext, AppDispatchContext } from "../state/context";
-import { SortOption, TimeRange } from "../types";
+import { MediaFilter, SortOption, TimeRange } from "../types";
 import { useReddit } from "../hooks/useReddit";
 import { useSavedPosts } from "../hooks/useSavedPosts";
 import { useClickOutside } from "../hooks/useClickOutside";
-import { SubredditAnalyzer } from "./SubredditAnalyzer";
 
 function Dropdown({ value, options, onChange }: {
   value: string;
@@ -30,13 +29,13 @@ function Dropdown({ value, options, onChange }: {
         </svg>
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 bg-black/90 backdrop-blur-sm border border-white/10 rounded-lg shadow-2xl min-w-[110px] z-20 py-1">
+        <div className="absolute left-0 top-full mt-1 dropdown-panel min-w-[110px] z-20 py-1">
           {options.map((opt) => (
             <button
               key={opt.value}
               onClick={() => { onChange(opt.value); setOpen(false); }}
               className={`block w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                opt.value === value ? "text-blue-400" : "text-white/60 hover:text-white hover:bg-white/5"
+                opt.value === value ? "text-[var(--accent)]" : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
             >
               {opt.label}
@@ -48,18 +47,57 @@ function Dropdown({ value, options, onChange }: {
   );
 }
 
-function SettingsPopover() {
+interface OverflowMenuProps {
+  onLoadFavorite: (sub: string) => void;
+}
+
+function OverflowMenu({ onLoadFavorite }: OverflowMenuProps) {
+  const state = useContext(AppStateContext);
+  const dispatch = useContext(AppDispatchContext);
   const [open, setOpen] = useState(false);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [ignoredUsers, setIgnoredUsers] = useState<string[]>([]);
   const [savePath, setSavePath] = useState("");
   const ref = useRef<HTMLDivElement>(null);
 
+  useClickOutside(ref, useCallback(() => setOpen(false), []));
+
   useEffect(() => {
     if (open) {
+      invoke<string[]>("get_favorites").then(setFavorites).catch(() => {});
+      invoke<string[]>("get_ignored_users").then(setIgnoredUsers).catch(() => {});
       invoke<string>("get_save_path").then(setSavePath).catch(() => {});
     }
   }, [open]);
 
-  useClickOutside(ref, useCallback(() => setOpen(false), []));
+  // Analyzer data
+  const authors = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const post of state.posts) {
+      if (post.author === "[deleted]") continue;
+      counts.set(post.author, (counts.get(post.author) || 0) + 1);
+    }
+    const entries: { name: string; count: number }[] = [];
+    for (const [name, count] of counts) entries.push({ name, count });
+    entries.sort((a, b) => b.count - a.count);
+    return entries;
+  }, [state.posts]);
+
+  const handleLogin = async () => {
+    if (state.isLoggedIn) {
+      await invoke("reddit_logout");
+      dispatch({ type: "SET_LOGGED_IN", payload: false });
+    } else {
+      const ok = await invoke<boolean>("reddit_login");
+      if (ok) dispatch({ type: "SET_LOGGED_IN", payload: true });
+    }
+  };
+
+  const handleIgnore = async (username: string) => {
+    await invoke("add_ignored_user", { username });
+    dispatch({ type: "REMOVE_POSTS_BY_AUTHOR", payload: username });
+    setIgnoredUsers((prev) => prev.filter((u) => u !== username));
+  };
 
   const pickFolder = async () => {
     try {
@@ -76,38 +114,147 @@ function SettingsPopover() {
     }
   };
 
-  const openFolder = () => {
-    invoke("open_save_folder").catch(() => {});
-  };
-
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
         className="icon-btn"
-        title="Settings"
+        title="Menu"
       >
         <svg viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z" />
         </svg>
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 bg-black/90 backdrop-blur-sm border border-white/10 rounded-lg shadow-2xl p-3 z-20 min-w-[260px]">
-          <div className="text-white/40 text-[10px] uppercase tracking-wider mb-1.5">Save location</div>
-          <div className="text-white/70 text-xs break-all mb-3 leading-relaxed">{savePath || "..."}</div>
-          <div className="flex gap-2">
+        <div className="absolute right-0 top-full mt-1 dropdown-panel min-w-[240px] max-h-[70vh] overflow-y-auto z-30">
+          {/* Account */}
+          <div className="px-3 py-2 border-b border-white/[0.06]">
+            <div className="text-white/30 text-[10px] uppercase tracking-wider mb-2">Account</div>
             <button
-              onClick={pickFolder}
-              className="text-white/50 hover:text-white text-xs px-2.5 py-1 rounded border border-white/10 hover:border-white/20 transition-colors"
+              onClick={handleLogin}
+              className="flex items-center gap-2 w-full text-left text-xs text-white/60 hover:text-white hover:bg-white/5 px-2 py-1.5 rounded transition-colors"
             >
-              Change
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0">
+                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+              </svg>
+              <span>{state.isLoggedIn ? "Log out" : "Log in to Reddit"}</span>
+              {state.isLoggedIn && (
+                <span className="ml-auto w-2 h-2 bg-[var(--accent-success)] rounded-full shrink-0" />
+              )}
             </button>
-            <button
-              onClick={openFolder}
-              className="text-white/50 hover:text-white text-xs px-2.5 py-1 rounded border border-white/10 hover:border-white/20 transition-colors"
-            >
-              Open
-            </button>
+          </div>
+
+          {/* Favorites */}
+          <div className="px-3 py-2 border-b border-white/[0.06]">
+            <div className="text-white/30 text-[10px] uppercase tracking-wider mb-2">Favorites</div>
+            {favorites.length === 0 ? (
+              <div className="text-white/20 text-xs px-2 py-1">No favorites yet</div>
+            ) : (
+              <>
+                <button
+                  onClick={() => { onLoadFavorite(favorites.join("+")); setOpen(false); }}
+                  className="block w-full text-left text-[var(--accent)] hover:bg-white/5 px-2 py-1.5 text-xs font-medium rounded transition-colors mb-0.5"
+                >
+                  Browse All
+                </button>
+                {favorites.map((fav) => (
+                  <button
+                    key={fav}
+                    onClick={() => { onLoadFavorite(fav); setOpen(false); }}
+                    className="block w-full text-left text-white/50 hover:text-white hover:bg-white/5 px-2 py-1.5 text-xs rounded transition-colors"
+                  >
+                    r/{fav}
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+
+          {/* Ignored Users */}
+          <div className="px-3 py-2 border-b border-white/[0.06]">
+            <div className="text-white/30 text-[10px] uppercase tracking-wider mb-2">Ignored Users</div>
+            {ignoredUsers.length === 0 ? (
+              <div className="text-white/20 text-xs px-2 py-1">No ignored users</div>
+            ) : (
+              ignoredUsers.map((user) => (
+                <div
+                  key={user}
+                  className="flex items-center justify-between px-2 py-1.5 text-xs text-white/50 hover:bg-white/5 rounded transition-colors"
+                >
+                  <span>u/{user}</span>
+                  <button
+                    onClick={async () => {
+                      await invoke("remove_ignored_user", { username: user });
+                      setIgnoredUsers((prev) => prev.filter((u) => u !== user));
+                    }}
+                    className="text-white/30 hover:text-[var(--accent-danger)] transition-colors"
+                    title="Unignore"
+                  >
+                    <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                      <path d="M4.646 4.646a.5.5 0 01.708 0L8 7.293l2.646-2.647a.5.5 0 01.708.708L8.707 8l2.647 2.646a.5.5 0 01-.708.708L8 8.707l-2.646 2.647a.5.5 0 01-.708-.708L7.293 8 4.646 5.354a.5.5 0 010-.708z"/>
+                    </svg>
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Top Posters (Analyzer) — only when posts are loaded */}
+          {state.posts.length > 0 && (
+            <div className="px-3 py-2 border-b border-white/[0.06]">
+              <div className="text-white/30 text-[10px] uppercase tracking-wider mb-2">
+                Top Posters ({state.posts.length} posts)
+              </div>
+              <div className="max-h-[200px] overflow-y-auto">
+                {authors.length === 0 ? (
+                  <div className="text-white/20 text-xs px-2 py-1">No authors</div>
+                ) : (
+                  authors.slice(0, 20).map((entry) => (
+                    <div
+                      key={entry.name}
+                      className="flex items-center justify-between px-2 py-1.5 text-xs hover:bg-white/5 rounded transition-colors gap-2"
+                    >
+                      <span className="text-white/30 font-mono w-5 text-right shrink-0">
+                        {entry.count}
+                      </span>
+                      <span className="text-white/50 truncate flex-1">
+                        u/{entry.name}
+                      </span>
+                      <button
+                        onClick={() => handleIgnore(entry.name)}
+                        className="text-white/30 hover:text-[var(--accent-danger)] transition-colors shrink-0"
+                        title={`Ignore u/${entry.name}`}
+                      >
+                        <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                          <path d="M4.646 4.646a.5.5 0 01.708 0L8 7.293l2.646-2.647a.5.5 0 01.708.708L8.707 8l2.647 2.646a.5.5 0 01-.708.708L8 8.707l-2.646 2.647a.5.5 0 01-.708-.708L7.293 8 4.646 5.354a.5.5 0 010-.708z" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Settings */}
+          <div className="px-3 py-2">
+            <div className="text-white/30 text-[10px] uppercase tracking-wider mb-2">Settings</div>
+            <div className="text-white/40 text-[10px] uppercase tracking-wider mb-1">Save location</div>
+            <div className="text-white/60 text-xs break-all mb-2 leading-relaxed px-2">{savePath || "..."}</div>
+            <div className="flex gap-2 px-2">
+              <button
+                onClick={pickFolder}
+                className="text-white/50 hover:text-white text-xs px-2.5 py-1 rounded border border-white/10 hover:border-white/20 transition-colors"
+              >
+                Change
+              </button>
+              <button
+                onClick={() => invoke("open_save_folder").catch(() => {})}
+                className="text-white/50 hover:text-white text-xs px-2.5 py-1 rounded border border-white/10 hover:border-white/20 transition-colors"
+              >
+                Open
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -125,17 +272,12 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
   const { fetchPosts } = useReddit();
   const { loadSavedPosts, exitSavedView } = useSavedPosts();
   const [input, setInput] = useState(state.subreddit);
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [showFavs, setShowFavs] = useState(false);
-  const [ignoredUsers, setIgnoredUsers] = useState<string[]>([]);
-  const [showIgnored, setShowIgnored] = useState(false);
 
   const currentPost = state.posts[state.currentIndex] ?? null;
   const isSavedMode = state.viewMode === "saved";
   const chromeClass = `ui-chrome ui-top ${uiVisible ? "" : "ui-hidden"}`;
 
   useEffect(() => {
-    invoke<string[]>("get_favorites").then(setFavorites).catch(() => {});
     invoke<{ sort: string; time_range: string }>("get_sort_preference")
       .then((pref) => {
         dispatch({ type: "SET_SORT", payload: pref.sort as SortOption });
@@ -163,7 +305,6 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
 
   const loadFavorite = (sub: string) => {
     setInput(sub);
-    setShowFavs(false);
     dispatch({ type: "SET_PLAYING", payload: false });
     fetchPosts(sub);
   };
@@ -188,10 +329,10 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
 
   if (isSavedMode) {
     return (
-      <div className={`absolute top-0 left-0 right-0 h-10 bg-black/40 flex items-center px-4 gap-3 z-10 ${chromeClass}`} data-ui-chrome>
+      <div className={`absolute top-0 left-0 right-0 h-10 flex items-center px-4 gap-3 z-10 ${chromeClass}`} style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)" }} data-ui-chrome>
         <span className="text-white/30 font-medium text-sm tracking-tight">crabbit</span>
         <div className="w-px h-4 bg-white/10" />
-        <span className="text-blue-400 text-xs">Saved</span>
+        <span className="text-[var(--accent)] text-xs">Saved</span>
         <button
           onClick={() => dispatch({
             type: "SET_SAVED_DISPLAY_MODE",
@@ -219,13 +360,13 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
         >
           Back
         </button>
-        <SettingsPopover />
+        <OverflowMenu onLoadFavorite={loadFavorite} />
       </div>
     );
   }
 
   return (
-    <div className={`absolute top-0 left-0 right-0 h-10 bg-black/40 flex items-center px-4 gap-2 z-10 ${chromeClass}`} data-ui-chrome>
+    <div className={`absolute top-0 left-0 right-0 h-10 flex items-center px-4 gap-2 z-10 ${chromeClass}`} style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)" }} data-ui-chrome>
       <button
         onClick={() => {
           dispatch({ type: "SET_SUBREDDIT", payload: "" });
@@ -246,7 +387,7 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="subreddit or u/user"
-          className="bg-transparent text-white/80 text-xs w-36 outline-none border-b border-white/10 focus:border-blue-500/50 px-1 py-0.5 transition-colors placeholder:text-white/20"
+          className="bg-transparent text-white/80 text-xs w-36 outline-none border-b border-white/10 focus:border-[var(--accent-hover)]/50 px-1 py-0.5 transition-colors placeholder:text-white/20"
         />
         <button
           type="submit"
@@ -295,6 +436,18 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
         />
       )}
 
+      {state.posts.length > 0 && (
+        <Dropdown
+          value={state.mediaFilter}
+          options={[
+            { value: "all", label: "All" },
+            { value: "photos", label: "Photos" },
+            { value: "animated", label: "Animated" },
+          ]}
+          onChange={(v) => dispatch({ type: "SET_MEDIA_FILTER", payload: v as MediaFilter })}
+        />
+      )}
+
       {state.showOverlay && currentPost && (
         <div className="flex items-center gap-2 ml-2 min-w-0 overflow-hidden">
           <div className="w-px h-4 bg-white/10 flex-shrink-0" />
@@ -309,29 +462,6 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
 
       <div className="relative ml-auto flex items-center gap-1">
         <button
-          onClick={async () => {
-            if (state.isLoggedIn) {
-              await invoke("reddit_logout");
-              dispatch({ type: "SET_LOGGED_IN", payload: false });
-            } else {
-              const ok = await invoke<boolean>("reddit_login");
-              if (ok) dispatch({ type: "SET_LOGGED_IN", payload: true });
-            }
-          }}
-          className="icon-btn"
-          title={state.isLoggedIn ? "Logged in — click to log out" : "Log in to Reddit"}
-        >
-          <svg viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-          </svg>
-          {state.isLoggedIn && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-400 rounded-full" />
-          )}
-        </button>
-
-        <SubredditAnalyzer onOpen={() => { setShowFavs(false); setShowIgnored(false); }} />
-
-        <button
           onClick={loadSavedPosts}
           className="icon-btn"
           title="Saved posts"
@@ -341,82 +471,7 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
           </svg>
         </button>
 
-        <button
-          onClick={() => {
-            setShowIgnored(!showIgnored);
-            setShowFavs(false);
-            invoke<string[]>("get_ignored_users").then(setIgnoredUsers).catch(() => {});
-          }}
-          className="icon-btn"
-          title="Ignored users"
-        >
-          <svg viewBox="0 0 20 20" fill="currentColor">
-            <path d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" fillRule="evenodd" clipRule="evenodd"/>
-          </svg>
-        </button>
-        {showIgnored && ignoredUsers.length > 0 && (
-          <div className="absolute right-0 top-full mt-1 bg-black/90 backdrop-blur-sm border border-white/10 rounded-lg shadow-2xl min-w-[140px] z-20 py-1">
-            {ignoredUsers.map((user) => (
-              <div
-                key={user}
-                className="flex items-center justify-between px-3 py-1.5 text-xs text-white/50 hover:bg-white/5 transition-colors"
-              >
-                <span>u/{user}</span>
-                <button
-                  onClick={async () => {
-                    await invoke("remove_ignored_user", { username: user });
-                    setIgnoredUsers(ignoredUsers.filter((u) => u !== user));
-                  }}
-                  className="ml-2 text-white/30 hover:text-red-400 transition-colors"
-                  title="Unignore"
-                >
-                  <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-                    <path d="M4.646 4.646a.5.5 0 01.708 0L8 7.293l2.646-2.647a.5.5 0 01.708.708L8.707 8l2.647 2.646a.5.5 0 01-.708.708L8 8.707l-2.646 2.647a.5.5 0 01-.708-.708L7.293 8 4.646 5.354a.5.5 0 010-.708z"/>
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        {showIgnored && ignoredUsers.length === 0 && (
-          <div className="absolute right-0 top-full mt-1 bg-black/90 backdrop-blur-sm border border-white/10 rounded-lg shadow-2xl min-w-[140px] z-20 py-1">
-            <div className="px-3 py-1.5 text-xs text-white/30">No ignored users</div>
-          </div>
-        )}
-
-        <button
-          onClick={() => {
-            setShowFavs(!showFavs);
-            setShowIgnored(false);
-            invoke<string[]>("get_favorites").then(setFavorites).catch(() => {});
-          }}
-          className="icon-btn"
-          title="Favorites"
-        >
-          <svg viewBox="0 0 20 20" fill="currentColor">
-            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-          </svg>
-        </button>
-        {showFavs && favorites.length > 0 && (
-          <div className="absolute right-0 top-full mt-1 bg-black/90 backdrop-blur-sm border border-white/10 rounded-lg shadow-2xl min-w-[140px] z-20 py-1">
-            <button
-              onClick={() => loadFavorite(favorites.join('+'))}
-              className="block w-full text-left text-blue-400 hover:text-blue-300 hover:bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors border-b border-white/10"
-            >
-              Browse All
-            </button>
-            {favorites.map((fav) => (
-              <button
-                key={fav}
-                onClick={() => loadFavorite(fav)}
-                className="block w-full text-left text-white/50 hover:text-white hover:bg-white/5 px-3 py-1.5 text-xs transition-colors"
-              >
-                r/{fav}
-              </button>
-            ))}
-          </div>
-        )}
-        <SettingsPopover />
+        <OverflowMenu onLoadFavorite={loadFavorite} />
       </div>
     </div>
   );

@@ -2,6 +2,13 @@ import { useContext, useCallback, useEffect, useState } from "react";
 import { invoke } from "../invoke";
 import { AppStateContext, AppDispatchContext } from "../state/context";
 import { useReddit } from "../hooks/useReddit";
+import { MediaFilter, MediaType } from "../types";
+
+function matchesFilter(mediaType: MediaType, filter: MediaFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "photos") return mediaType === "image" || mediaType === "gallery";
+  return mediaType === "video" || mediaType === "animated_gif" || mediaType === "embed";
+}
 
 interface Props {
   onNext: () => void;
@@ -79,7 +86,7 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, onR
   };
 
   return (
-    <div className={`absolute bottom-0 left-0 right-0 h-10 bg-black/40 flex items-center px-3 gap-1 text-white ${chromeClass}`} data-ui-chrome>
+    <div className={`absolute bottom-0 left-0 right-0 h-10 flex items-center px-3 gap-1 text-white ${chromeClass}`} style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent)" }} data-ui-chrome>
       <button onClick={onPrev} className="icon-btn" title="Previous (←)">
         <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3.5 3v10a.5.5 0 001 0V3a.5.5 0 00-1 0zm8.354.854a.5.5 0 00-.708-.708l-5 5a.5.5 0 000 .708l5 5a.5.5 0 00.708-.708L7.207 8l4.647-4.646z"/></svg>
       </button>
@@ -104,7 +111,14 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, onR
 
       <span className="text-white/20 text-[10px] ml-auto tabular-nums select-none">
         {state.posts.length > 0
-          ? `${state.currentIndex + 1}/${state.posts.length}`
+          ? (() => {
+              if (state.mediaFilter === "all") {
+                return `${state.currentIndex + 1}/${state.posts.length}`;
+              }
+              const matching = state.posts.filter((p) => matchesFilter(p.media_type, state.mediaFilter));
+              const pos = matching.findIndex((p) => p === state.posts[state.currentIndex]);
+              return `${pos + 1}/${matching.length}`;
+            })()
           : ""}
       </span>
 
@@ -156,7 +170,7 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, onR
           </button>
           <button
             onClick={onDelete}
-            className="icon-btn hover:!text-red-400"
+            className="icon-btn destructive"
             title="Delete saved post"
           >
             <svg viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
@@ -188,7 +202,7 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, onR
           </button>
           <button
             onClick={toggleFavorite}
-            className={`icon-btn ${isFavorite ? "!text-yellow-500" : ""}`}
+            className={`icon-btn ${isFavorite ? "!text-[var(--accent-fav)]" : ""}`}
             title="Favorite subreddit"
           >
             {isFavorite ? (

@@ -79,7 +79,7 @@ export function SavedGridView() {
           <button
             key={post.id}
             onClick={() => openPost(index)}
-            className="group relative rounded-lg overflow-hidden bg-white/[0.03] border border-white/[0.06] hover:border-white/[0.15] transition-all duration-200 hover:shadow-lg hover:shadow-black/20 hover:scale-[1.02] text-left"
+            className="group relative rounded-xl overflow-hidden bg-[var(--surface-2)] border border-white/[0.06] hover:border-white/[0.15] transition-all duration-200 hover:shadow-lg hover:shadow-black/30 hover:scale-[1.02] text-left"
           >
             <div className="relative aspect-[4/3] overflow-hidden bg-black">
               <TileThumbnail post={post} />

@@ -64,7 +64,7 @@ export function SubredditAnalyzer({ onOpen }: { onOpen?: () => void }) {
         </svg>
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 bg-black/90 backdrop-blur-sm border border-white/10 rounded-lg shadow-2xl min-w-[220px] z-20">
+        <div className="absolute right-0 top-full mt-1 dropdown-panel min-w-[220px] z-20">
           <div className="px-3 py-2 border-b border-white/10">
             <span className="text-white/40 text-[10px] uppercase tracking-wider">
               Top Posters ({state.posts.length} posts)
@@ -87,7 +87,7 @@ export function SubredditAnalyzer({ onOpen }: { onOpen?: () => void }) {
                   </span>
                   <button
                     onClick={() => handleIgnore(entry.name)}
-                    className="text-white/30 hover:text-red-400 transition-colors shrink-0"
+                    className="text-white/30 hover:text-[var(--accent-danger)] transition-colors shrink-0"
                     title={`Ignore u/${entry.name}`}
                   >
                     <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
