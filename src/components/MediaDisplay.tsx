@@ -17,6 +17,7 @@ export function MediaDisplay({ post, rotation = 0, zoomPan }: Props) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+  const [videoReady, setVideoReady] = useState(false);
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -31,6 +32,16 @@ export function MediaDisplay({ post, rotation = 0, zoomPan }: Props) {
   useEffect(() => {
     const url = post.media[0]?.url || post.embed_url || "(none)";
     console.log(`[slide] id=${post.id} type=${post.media_type} sub=${post.subreddit} title="${post.title.slice(0, 60)}" url=${url}`);
+    setVideoReady(false);
+  }, [post.id]);
+
+  // Show video element once it has data to display
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const show = () => setVideoReady(true);
+    video.addEventListener("loadeddata", show);
+    return () => video.removeEventListener("loadeddata", show);
   }, [post.id]);
 
   const isVideo = post.media_type === "video" || post.media_type === "animated_gif";
@@ -68,6 +79,7 @@ export function MediaDisplay({ post, rotation = 0, zoomPan }: Props) {
               objectFit: "contain",
               transform: `translate(${zpTx}px, ${zpTy}px) scale(${zpScale}) rotate(${rotation}deg)`,
               flexShrink: 0,
+              visibility: videoReady ? "visible" : "hidden",
             }}
             playsInline
           />

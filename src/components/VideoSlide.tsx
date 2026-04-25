@@ -23,20 +23,20 @@ async function getServerPort(): Promise<number> {
 export function VideoSlide({ item, audioUrl, isGif, rotation, videoRef, audioRef }: Props) {
   const { isMuted, volume } = useContext(AppStateContext);
   const [videoError, setVideoError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
-      setLoading(true);
       setVideoError(null);
       setReady(false);
+      const t0 = performance.now();
 
       try {
         const port = await getServerPort();
         const videoKey: string = await invoke("preload_video", { url: item.url });
+        console.log(`[VideoSlide] preload_video done in ${(performance.now() - t0).toFixed(0)}ms for ${item.url.split('/').pop()}`);
         if (cancelled) return;
 
         const video = videoRef.current;
@@ -46,19 +46,20 @@ export function VideoSlide({ item, audioUrl, isGif, rotation, videoRef, audioRef
         }
 
         if (audioUrl && audioRef.current) {
+          const tAudio = performance.now();
           const audioKey: string = await invoke("preload_video", { url: audioUrl });
+          console.log(`[VideoSlide] audio preload done in ${(performance.now() - tAudio).toFixed(0)}ms`);
           if (cancelled) return;
           audioRef.current.src = `http://127.0.0.1:${port}/${audioKey}`;
           audioRef.current.load();
         }
 
+        console.log(`[VideoSlide] ready in ${(performance.now() - t0).toFixed(0)}ms total`);
         setReady(true);
       } catch (e) {
         if (!cancelled) {
           setVideoError(`Fetch failed: ${e}`);
         }
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     }
 
@@ -133,14 +134,6 @@ export function VideoSlide({ item, audioUrl, isGif, rotation, videoRef, audioRef
     video.controls = !isGif && rotation === 0;
     video.muted = isGif || (!!audioUrl ? true : isMuted);
   }, [isGif, audioUrl, isMuted, ready, rotation]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center w-full h-full">
-        <div className="text-white/50 text-sm">Loading video...</div>
-      </div>
-    );
-  }
 
   return (
     <>

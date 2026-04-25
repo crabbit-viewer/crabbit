@@ -1,14 +1,15 @@
-import { net, session } from "electron";
+import { BrowserWindow, net, session } from "electron";
 import { parseListing } from "./parser";
 import type { FetchParams, FetchResult, MediaPost, MediaType } from "./types";
 
 const USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 
-export async function fetchPosts(params: FetchParams): Promise<FetchResult> {
+export async function fetchPosts(params: FetchParams, window: BrowserWindow | null): Promise<FetchResult> {
   const sort = params.sort ?? "hot";
   const timeRange = params.time_range ?? "day";
   const limit = Math.min(params.limit ?? 25, 100);
+  const t0 = performance.now();
 
   const isUser = params.subreddit.startsWith("user/");
   console.error(
@@ -22,13 +23,68 @@ export async function fetchPosts(params: FetchParams): Promise<FetchResult> {
     params.after ?? undefined,
     limit
   );
+  const tListing = performance.now();
+  console.error(`[fetch_posts] Listing fetched in ${(tListing - t0).toFixed(0)}ms`);
 
   const result = parseListing(listing);
-  await resolveRedgifs(result.posts);
 
-  console.error(
-    `[fetch_posts] Returned ${result.posts.length} posts, after=${result.after ?? "null"}`
-  );
+  // Split redgifs into early (first 3) and deferred
+  const redgifsIndices: Array<{ index: number; slug: string }> = [];
+  for (let i = 0; i < result.posts.length; i++) {
+    const embedUrl = result.posts[i].embed_url;
+    if (embedUrl?.startsWith("redgifs:")) {
+      redgifsIndices.push({ index: i, slug: embedUrl.slice(8) });
+    }
+  }
+
+  if (redgifsIndices.length > 0) {
+    const earlyCount = 3;
+    const early = redgifsIndices.slice(0, earlyCount);
+    const deferred = redgifsIndices.slice(earlyCount);
+
+    // Resolve first few inline so the first video plays immediately
+    let token: string | null = null;
+    try {
+      token = await redgifsToken();
+      const earlyResults = await Promise.allSettled(
+        early.map(({ slug }) => redgifsVideoUrl(token!, slug))
+      );
+      for (let i = 0; i < early.length; i++) {
+        const { index, slug } = early[i];
+        const r = earlyResults[i];
+        if (r.status === "fulfilled") {
+          result.posts[index].media_type = "video" as MediaType;
+          result.posts[index].media = [{ url: r.value, width: null, height: null, caption: null }];
+          result.posts[index].embed_url = null;
+        } else {
+          result.posts[index].embed_url = `https://www.redgifs.com/ifr/${slug}`;
+        }
+      }
+    } catch {
+      for (const { index, slug } of early) {
+        result.posts[index].embed_url = `https://www.redgifs.com/ifr/${slug}`;
+      }
+    }
+
+    // Set remaining redgifs to iframe embeds for now
+    for (const { index, slug } of deferred) {
+      result.posts[index].embed_url = `https://www.redgifs.com/ifr/${slug}`;
+    }
+
+    const tEarly = performance.now();
+    console.error(
+      `[fetch_posts] Returned ${result.posts.length} posts (${early.length} redgifs resolved, ${deferred.length} deferred) in ${(tEarly - t0).toFixed(0)}ms (listing=${(tListing - t0).toFixed(0)}ms early-redgifs=${(tEarly - tListing).toFixed(0)}ms), after=${result.after ?? "null"}`
+    );
+
+    // Resolve remaining redgifs in background
+    if (deferred.length > 0 && window && token) {
+      resolveRedgifsBackground(result.posts, deferred, token, window);
+    }
+  } else {
+    console.error(
+      `[fetch_posts] Returned ${result.posts.length} posts in ${(performance.now() - t0).toFixed(0)}ms, after=${result.after ?? "null"}`
+    );
+  }
 
   return result;
 }
@@ -69,7 +125,13 @@ async function fetchListing(
   return response.json();
 }
 
+let cachedRedgifsToken: { token: string; expires: number } | null = null;
+
 async function redgifsToken(): Promise<string> {
+  if (cachedRedgifsToken && Date.now() < cachedRedgifsToken.expires) {
+    return cachedRedgifsToken.token;
+  }
+  const t0 = performance.now();
   console.error("[redgifs] Requesting auth token...");
   const resp = await net.fetch("https://api.redgifs.com/v2/auth/temporary", {
     headers: { "User-Agent": USER_AGENT },
@@ -78,6 +140,8 @@ async function redgifsToken(): Promise<string> {
   const data: any = await resp.json();
   const token = data?.token;
   if (!token) throw new Error("No token in RedGifs auth response");
+  cachedRedgifsToken = { token, expires: Date.now() + 55 * 60 * 1000 };
+  console.error(`[redgifs] Auth token obtained in ${(performance.now() - t0).toFixed(0)}ms`);
   return token;
 }
 
@@ -96,47 +160,42 @@ async function redgifsVideoUrl(token: string, slug: string): Promise<string> {
   return url;
 }
 
-async function resolveRedgifs(posts: MediaPost[]): Promise<void> {
-  const redgifsIndices: Array<{ index: number; slug: string }> = [];
+function resolveRedgifsBackground(
+  posts: MediaPost[],
+  redgifsIndices: Array<{ index: number; slug: string }>,
+  token: string,
+  window: BrowserWindow
+): void {
+  const t0 = performance.now();
+  console.error(`[redgifs] Resolving ${redgifsIndices.length} deferred posts in background`);
 
-  for (let i = 0; i < posts.length; i++) {
-    const embedUrl = posts[i].embed_url;
-    if (embedUrl?.startsWith("redgifs:")) {
-      redgifsIndices.push({ index: i, slug: embedUrl.slice(8) });
-    }
-  }
-
-  if (redgifsIndices.length === 0) return;
-  console.error(`[redgifs] Found ${redgifsIndices.length} posts to resolve`);
-
-  let token: string;
-  try {
-    token = await redgifsToken();
-  } catch {
-    // Fallback to iframe embeds
-    for (const { index, slug } of redgifsIndices) {
-      posts[index].embed_url = `https://www.redgifs.com/ifr/${slug}`;
-    }
-    return;
-  }
-
-  const results = await Promise.allSettled(
+  Promise.allSettled(
     redgifsIndices.map(({ slug }) => redgifsVideoUrl(token, slug))
-  );
+  ).then((results) => {
+    const updates: Array<{ id: string; media_type: MediaType; media: MediaPost["media"]; embed_url: string | null }> = [];
 
-  for (let i = 0; i < redgifsIndices.length; i++) {
-    const { index, slug } = redgifsIndices[i];
-    const result = results[i];
+    for (let i = 0; i < redgifsIndices.length; i++) {
+      const { index } = redgifsIndices[i];
+      const result = results[i];
+      const post = posts[index];
 
-    if (result.status === "fulfilled") {
-      const videoUrl = result.value;
-      posts[index].media_type = "video" as MediaType;
-      posts[index].media = [
-        { url: videoUrl, width: null, height: null, caption: null },
-      ];
-      posts[index].embed_url = null;
-    } else {
-      posts[index].embed_url = `https://www.redgifs.com/ifr/${slug}`;
+      if (result.status === "fulfilled") {
+        updates.push({
+          id: post.id,
+          media_type: "video" as MediaType,
+          media: [{ url: result.value, width: null, height: null, caption: null }],
+          embed_url: null,
+        });
+      }
     }
-  }
+
+    const elapsed = performance.now() - t0;
+    console.error(`[redgifs] Background resolved ${updates.length}/${redgifsIndices.length} posts in ${elapsed.toFixed(0)}ms`);
+
+    if (updates.length > 0 && !window.isDestroyed()) {
+      window.webContents.send("redgifs-resolved", updates);
+    }
+  }).catch((err) => {
+    console.error(`[redgifs] Background resolution failed: ${err}`);
+  });
 }

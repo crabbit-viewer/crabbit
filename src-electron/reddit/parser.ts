@@ -158,6 +158,13 @@ function parsePost(post: any): MediaPost | null {
     if (content) {
       const src = extractIframeSrc(content);
       if (src) {
+        // Check if it's a redgifs embed — resolve as direct video instead of iframe
+        if (src.includes("redgifs.com")) {
+          const slug = redgifsSlugFromUrl(src);
+          if (slug) {
+            return { ...base, media_type: "embed", embed_url: `redgifs:${slug}` };
+          }
+        }
         return { ...base, media_type: "embed", embed_url: src };
       }
     }
@@ -251,6 +258,13 @@ function redgifsSlug(url: string): string | null {
   let slug = parts[parts.length - 1];
   slug = slug.split("?")[0];
   if (slug) return slug.toLowerCase();
+  return null;
+}
+
+function redgifsSlugFromUrl(url: string): string | null {
+  // Handles /watch/, /ifr/, and other redgifs URL patterns
+  const match = url.match(/redgifs\.com\/(?:watch|ifr)\/([a-zA-Z0-9]+)/);
+  if (match) return match[1].toLowerCase();
   return null;
 }
 

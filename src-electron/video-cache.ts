@@ -113,6 +113,7 @@ export async function preloadVideo(
   }
 
   cache.markInflight(key);
+  const t0 = performance.now();
   console.error(`[preload] Downloading: ${url}`);
 
   try {
@@ -133,9 +134,10 @@ export async function preloadVideo(
       resp.headers.get("content-type") ?? "video/mp4";
     const arrayBuf = await resp.arrayBuffer();
     const bytes = Buffer.from(arrayBuf);
+    const elapsed = performance.now() - t0;
 
     console.error(
-      `[preload] Cached ${bytes.length} bytes (status=${resp.status} type=${contentType}) for: ${url}`
+      `[preload] Cached ${(bytes.length / 1024 / 1024).toFixed(1)}MB in ${elapsed.toFixed(0)}ms (${(bytes.length / 1024 / elapsed * 1000).toFixed(0)} KB/s) for: ${url}`
     );
 
     cache.insert(key, bytes, contentType);

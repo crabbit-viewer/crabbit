@@ -26,14 +26,14 @@ export function GallerySlide({ items }: Props) {
           {item.caption}
         </p>
       )}
-      <div className="absolute bottom-4 flex gap-1.5 items-center">
+      <div className="absolute bottom-4 flex gap-1.5 items-center bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5">
         {items.length <= 10 ? (
           items.map((_, i) => (
             <button
               key={i}
               className={`rounded-full transition-all duration-200 ${
                 i === galleryIndex
-                  ? "w-2.5 h-2.5 bg-white ring-2 ring-white/30"
+                  ? "w-2.5 h-2.5 bg-white ring-1 ring-white/20"
                   : "w-2 h-2 bg-white/40 hover:bg-white/60"
               }`}
               onClick={() => dispatch({ type: "SET_GALLERY_INDEX", payload: i })}

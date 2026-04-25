@@ -86,7 +86,9 @@ export function useKeyboard(
           dispatch({ type: "TOGGLE_MUTE" });
           break;
         case "Escape":
-          if (document.fullscreenElement) {
+          if (state.sidebarOpen) {
+            dispatch({ type: "SET_SIDEBAR", payload: false });
+          } else if (document.fullscreenElement) {
             document.exitFullscreen();
           } else if (state.viewMode === "saved" && state.savedDisplayMode === "slideshow") {
             dispatch({ type: "SET_SAVED_DISPLAY_MODE", payload: "grid" });
@@ -120,7 +122,7 @@ export function useKeyboard(
           break;
       }
     },
-    [next, prev, togglePlay, savePost, rotate, resetZoom, dispatch, currentPost, state.galleryIndex, state.volume, state.viewMode, state.savedDisplayMode]
+    [next, prev, togglePlay, savePost, rotate, resetZoom, dispatch, currentPost, state.galleryIndex, state.volume, state.viewMode, state.savedDisplayMode, state.sidebarOpen]
   );
 
   useEffect(() => {

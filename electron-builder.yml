@@ -7,6 +7,9 @@ files:
   - dist/**/*
   - dist-electron/**/*
 asar: true
+extraResources:
+  - from: build/icon.png
+    to: icon.png
 
 publish:
   provider: github

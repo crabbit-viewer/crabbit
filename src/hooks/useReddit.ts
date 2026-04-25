@@ -15,6 +15,7 @@ export function useReddit() {
 
       dispatch({ type: "SET_LOADING", payload: true });
       dispatch({ type: "SET_ERROR", payload: null });
+      const t0 = performance.now();
 
       try {
         const params = {
@@ -25,29 +26,61 @@ export function useReddit() {
           limit: 50,
         };
 
-        // When logged in, fetch via main process (net.fetch includes session cookies).
-        // When not logged in, fetch from renderer (bypasses Cloudflare bot detection).
-        const [result, ignored] = await Promise.all([
-          state.isLoggedIn
-            ? invoke<FetchResult>("fetch_posts", { params })
-            : fetchRedditPosts(params),
-          invoke<string[]>("get_ignored_users").catch(() => [] as string[]),
-        ]);
+        let result: FetchResult;
+        let deferredUpdates: Promise<any[]> | null = null;
 
-        if (ignored.length > 0) {
-          const ignoredSet = new Set(ignored.map((u) => u.toLowerCase()));
-          result.posts = result.posts.filter(
-            (p) => !ignoredSet.has(p.author.toLowerCase())
-          );
+        if (state.isLoggedIn) {
+          // Logged in: fetch via main process (redgifs resolved there, updates via IPC event)
+          const [r, ignored] = await Promise.all([
+            invoke<FetchResult>("fetch_posts", { params }),
+            invoke<string[]>("get_ignored_users").catch(() => [] as string[]),
+          ]);
+          result = r;
+          if (ignored.length > 0) {
+            const ignoredSet = new Set(ignored.map((u) => u.toLowerCase()));
+            result.posts = result.posts.filter(
+              (p) => !ignoredSet.has(p.author.toLowerCase())
+            );
+          }
+        } else {
+          // Not logged in: fetch from renderer
+          const [r, ignored] = await Promise.all([
+            fetchRedditPosts(params),
+            invoke<string[]>("get_ignored_users").catch(() => [] as string[]),
+          ]);
+          result = r.result;
+          deferredUpdates = r.deferredUpdates;
+          if (ignored.length > 0) {
+            const ignoredSet = new Set(ignored.map((u) => u.toLowerCase()));
+            result.posts = result.posts.filter(
+              (p) => !ignoredSet.has(p.author.toLowerCase())
+            );
+          }
         }
+
+        console.log(`[useReddit] fetch_posts completed in ${(performance.now() - t0).toFixed(0)}ms, got ${result.posts.length} posts`);
 
         if (append) {
           dispatch({ type: "APPEND_POSTS", payload: result });
         } else {
+          // Start preloading the first video before React re-renders
+          const first = result.posts[0];
+          if (first && (first.media_type === "video" || first.media_type === "animated_gif") && first.media[0]) {
+            invoke("preload_video", { url: first.media[0].url }).catch(() => {});
+          }
           dispatch({ type: "SET_POSTS", payload: result });
           if (subreddit) {
             dispatch({ type: "SET_SUBREDDIT", payload: sub });
           }
+        }
+
+        // Handle deferred redgifs updates (renderer-side fetch only)
+        if (deferredUpdates) {
+          deferredUpdates.then((updates) => {
+            if (updates.length > 0) {
+              dispatch({ type: "UPDATE_POSTS", payload: updates });
+            }
+          }).catch(() => {});
         }
       } catch (err) {
         dispatch({

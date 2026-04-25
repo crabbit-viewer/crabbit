@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  nativeImage,
   protocol,
   session,
   shell,
@@ -66,8 +67,15 @@ function createWindow(): void {
       nodeIntegration: false,
     },
     title: "Crabbit",
-    backgroundColor: "#000000",
+    backgroundColor: "#121218",
     autoHideMenuBar: true,
+    icon: (() => {
+      const iconPath = path.join(process.resourcesPath || path.join(__dirname, ".."), "icon.png");
+      console.log("[icon] Loading from:", iconPath, "exists:", fs.existsSync(iconPath));
+      const img = nativeImage.createFromPath(iconPath);
+      console.log("[icon] Loaded size:", img.getSize());
+      return img;
+    })(),
   });
 
   // Dev mode: load Vite dev server; Prod: load built files
@@ -90,7 +98,7 @@ function createWindow(): void {
 
 function setupIPC(): void {
   ipcMain.handle("fetch_posts", async (_event, args) => {
-    return fetchPosts(args.params);
+    return fetchPosts(args.params, mainWindow);
   });
 
   ipcMain.handle("get_favorites", async () => {

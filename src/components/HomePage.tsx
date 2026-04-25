@@ -41,7 +41,7 @@ export function HomePage() {
       <div
         className="flex flex-col items-center justify-center w-full h-full gap-5"
         style={{
-          background: "radial-gradient(ellipse at center, #111827 0%, var(--surface-0) 70%)",
+          background: "radial-gradient(ellipse at center, var(--surface-2) 0%, var(--surface-0) 70%)",
         }}
       >
         <svg width="56" height="56" viewBox="0 0 24 24" fill="none" className="text-white/[0.06]">
@@ -59,7 +59,7 @@ export function HomePage() {
     <div
       className="flex flex-col items-center justify-center w-full h-full px-8 py-16"
       style={{
-        background: "radial-gradient(ellipse at center, #111827 0%, var(--surface-0) 70%)",
+        background: "radial-gradient(ellipse at center, var(--surface-2) 0%, var(--surface-0) 70%)",
       }}
     >
       <button

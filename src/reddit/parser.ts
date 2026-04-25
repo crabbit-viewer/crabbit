@@ -111,7 +111,13 @@ function parsePost(post: any): MediaPost | null {
     const content: string | undefined = post.secure_media_embed?.content;
     if (content) {
       const src = extractIframeSrc(content);
-      if (src) return { ...base, media_type: "embed", embed_url: src };
+      if (src) {
+        if (src.includes("redgifs.com")) {
+          const slug = redgifsSlugFromUrl(src);
+          if (slug) return { ...base, media_type: "embed", embed_url: `redgifs:${slug}` };
+        }
+        return { ...base, media_type: "embed", embed_url: src };
+      }
     }
   }
 
@@ -173,6 +179,12 @@ function redgifsSlug(url: string): string | null {
   if (parts.length < 2) return null;
   const slug = parts[parts.length - 1].split("?")[0];
   return slug ? slug.toLowerCase() : null;
+}
+
+function redgifsSlugFromUrl(url: string): string | null {
+  const match = url.match(/redgifs\.com\/(?:watch|ifr)\/([a-zA-Z0-9]+)/);
+  if (match) return match[1].toLowerCase();
+  return null;
 }
 
 function extractIframeSrc(html: string): string | null {

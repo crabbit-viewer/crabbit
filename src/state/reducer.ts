@@ -40,6 +40,7 @@ export interface AppState {
   notification: Notification | null;
   currentPostSaved: boolean;
   isLoggedIn: boolean;
+  sidebarOpen: boolean;
 }
 
 const defaultState: AppState = {
@@ -64,6 +65,7 @@ const defaultState: AppState = {
   notification: null,
   currentPostSaved: false,
   isLoggedIn: false,
+  sidebarOpen: false,
 };
 
 export const initialState: AppState = defaultState;
@@ -96,7 +98,10 @@ export type AppAction =
   | { type: "EXIT_SAVED_VIEW" }
   | { type: "REMOVE_POSTS_BY_AUTHOR"; payload: string }
   | { type: "SET_LOGGED_IN"; payload: boolean }
-  | { type: "SET_MEDIA_FILTER"; payload: MediaFilter };
+  | { type: "SET_MEDIA_FILTER"; payload: MediaFilter }
+  | { type: "TOGGLE_SIDEBAR" }
+  | { type: "SET_SIDEBAR"; payload: boolean }
+  | { type: "UPDATE_POSTS"; payload: Array<{ id: string; media_type: MediaType; media: MediaPost["media"]; embed_url: string | null }> };
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -237,6 +242,21 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       }
       // No matching posts, just set the filter
       return { ...state, mediaFilter: filter };
+    }
+    case "TOGGLE_SIDEBAR":
+      return { ...state, sidebarOpen: !state.sidebarOpen };
+    case "SET_SIDEBAR":
+      return { ...state, sidebarOpen: action.payload };
+    case "UPDATE_POSTS": {
+      const updateMap = new Map(action.payload.map((u) => [u.id, u]));
+      const updatedPosts = state.posts.map((post) => {
+        const update = updateMap.get(post.id);
+        if (update) {
+          return { ...post, media_type: update.media_type, media: update.media, embed_url: update.embed_url };
+        }
+        return post;
+      });
+      return { ...state, posts: updatedPosts };
     }
     default:
       return state;

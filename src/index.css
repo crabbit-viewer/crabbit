@@ -1,10 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  /* Surface hierarchy */
-  --surface-0: #050505;
-  --surface-1: #0d0d0d;
-  --surface-2: #161616;
+  /* Surface hierarchy — warm dark tones, not pure black */
+  --surface-0: #121218;
+  --surface-1: #1a1a22;
+  --surface-2: #22222c;
+  --surface-3: #2a2a36;
 
   /* Accent colors */
   --accent: #60a5fa;
@@ -23,7 +24,7 @@ body {
   padding: 0;
   background: var(--surface-0);
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: "Plus Jakarta Sans", sans-serif;
 }
 
 @keyframes fade-in {
@@ -37,7 +38,7 @@ body {
 
 /* UI auto-hide transitions */
 .ui-chrome {
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  transition: opacity 0.35s ease, transform 0.35s ease;
 }
 
 .ui-chrome.ui-hidden {
@@ -53,7 +54,17 @@ body {
   transform: translateY(100%);
 }
 
-/* Subtle scrollbar for dropdowns */
+/* Remove focus outline and loading spinner from video player */
+video:focus, video:focus-visible {
+  outline: none;
+}
+
+video::-webkit-media-controls-overlay-play-button,
+video::-webkit-media-controls-loading-panel {
+  display: none !important;
+}
+
+/* Subtle scrollbar for dropdowns and sidebar */
 ::-webkit-scrollbar {
   width: 4px;
 }
@@ -103,10 +114,60 @@ body {
 
 /* Dropdown panel */
 .dropdown-panel {
-  background: rgba(22,22,22,0.95);
+  background: rgba(34,34,44,0.95);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 12px;
   box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
   animation: fade-in 0.15s ease-out;
+}
+
+/* Sidebar drawer */
+.sidebar-panel {
+  background: rgba(26, 26, 34, 0.98);
+  backdrop-filter: blur(20px);
+  border-left: 1px solid rgba(255,255,255,0.06);
+}
+
+.sidebar-backdrop {
+  background: rgba(0, 0, 0, 0.5);
+  transition: opacity 200ms ease;
+}
+
+/* Pill group for sort/filter controls */
+.pill-group {
+  display: flex;
+  align-items: center;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+}
+
+.pill-group > :first-child .pill-segment,
+.pill-group > :first-child.pill-segment {
+  border-radius: 7px 0 0 7px;
+}
+
+.pill-group > :last-child .pill-segment,
+.pill-group > :last-child.pill-segment {
+  border-radius: 0 7px 7px 0;
+}
+
+.pill-segment {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  border-right: 1px solid rgba(255,255,255,0.06);
+  transition: color 0.15s, background 0.15s;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pill-segment:last-child {
+  border-right: none;
+}
+
+.pill-segment:hover {
+  color: rgba(255,255,255,0.7);
+  background: rgba(255,255,255,0.04);
 }

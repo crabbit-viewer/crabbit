@@ -4,6 +4,7 @@ declare global {
   interface Window {
     electronAPI: {
       invoke: <T>(channel: string, args?: Record<string, unknown>) => Promise<T>;
+      onRedgifsResolved: (callback: (updates: any[]) => void) => () => void;
     };
   }
 }

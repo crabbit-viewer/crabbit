@@ -7,39 +7,8 @@ export function useSlideshow() {
   const state = useContext(AppStateContext);
   const dispatch = useContext(AppDispatchContext);
   const { fetchPosts } = useReddit();
-  const timerRef = useRef<number | null>(null);
 
   const currentPost = state.posts[state.currentIndex] ?? null;
-
-  // Auto-advance timer
-  useEffect(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-
-    if (
-      state.isPlaying &&
-      state.posts.length > 0 &&
-      currentPost?.media_type !== "embed"
-    ) {
-      timerRef.current = window.setInterval(() => {
-        dispatch({ type: "NEXT_SLIDE" });
-      }, state.timerSpeed);
-    }
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, [
-    state.isPlaying,
-    state.timerSpeed,
-    state.posts.length,
-    currentPost?.media_type,
-    dispatch,
-  ]);
 
   // Prefetch when nearing end
   useEffect(() => {
@@ -80,17 +49,9 @@ export function useSlideshow() {
     }
   }, [state.currentIndex, state.mediaFilter]);
 
-  const next = useCallback(() => {
-    dispatch({ type: "NEXT_SLIDE" });
-  }, [dispatch]);
-
-  const prev = useCallback(() => {
-    dispatch({ type: "PREV_SLIDE" });
-  }, [dispatch]);
-
   const togglePlay = useCallback(() => {
     dispatch({ type: "TOGGLE_PLAY" });
   }, [dispatch]);
 
-  return { currentPost, next, prev, togglePlay };
+  return { currentPost, togglePlay };
 }
