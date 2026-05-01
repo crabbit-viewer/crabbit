@@ -16,6 +16,7 @@ export function GallerySlide({ items }: Props) {
   return (
     <div className="flex flex-col items-center justify-center w-full h-full relative">
       <img
+        key={item.url}
         src={item.url}
         alt=""
         className="w-full h-[calc(100%-3rem)] object-contain"

@@ -41,6 +41,7 @@ export interface AppState {
   currentPostSaved: boolean;
   isLoggedIn: boolean;
   sidebarOpen: boolean;
+  autoplayMode: boolean;
 }
 
 const defaultState: AppState = {
@@ -66,6 +67,7 @@ const defaultState: AppState = {
   currentPostSaved: false,
   isLoggedIn: false,
   sidebarOpen: false,
+  autoplayMode: false,
 };
 
 export const initialState: AppState = defaultState;
@@ -101,7 +103,8 @@ export type AppAction =
   | { type: "SET_MEDIA_FILTER"; payload: MediaFilter }
   | { type: "TOGGLE_SIDEBAR" }
   | { type: "SET_SIDEBAR"; payload: boolean }
-  | { type: "UPDATE_POSTS"; payload: Array<{ id: string; media_type: MediaType; media: MediaPost["media"]; embed_url: string | null }> };
+  | { type: "UPDATE_POSTS"; payload: Array<{ id: string; media_type: MediaType; media: MediaPost["media"]; embed_url: string | null }> }
+  | { type: "TOGGLE_AUTOPLAY" };
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -257,6 +260,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         return post;
       });
       return { ...state, posts: updatedPosts };
+    }
+    case "TOGGLE_AUTOPLAY": {
+      const entering = !state.autoplayMode;
+      return {
+        ...state,
+        autoplayMode: entering,
+        isPlaying: entering ? state.isPlaying : false,
+      };
     }
     default:
       return state;

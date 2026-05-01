@@ -9,6 +9,7 @@ import { Notification } from "./components/Notification";
 import { Sidebar } from "./components/Sidebar";
 import { useSlideshow } from "./hooks/useSlideshow";
 import { useKeyboard } from "./hooks/useKeyboard";
+import { useVideoPlayback } from "./hooks/useVideoPlayback";
 import { useSavedPosts } from "./hooks/useSavedPosts";
 import { useIdleHide } from "./hooks/useIdleHide";
 import { useZoomPan } from "./hooks/useZoomPan";
@@ -23,12 +24,17 @@ function matchesFilter(mediaType: MediaType, filter: MediaFilter): boolean {
 function SlideshowContainer() {
   const state = useContext(AppStateContext);
   const dispatch = useContext(AppDispatchContext);
-  const { togglePlay } = useSlideshow();
+  useSlideshow();
   const { saveCurrentPost } = useSavedPosts();
   const [rotation, setRotation] = useState(0);
   const [isPending, setIsPending] = useState(false);
   const pendingRef = useRef(false);
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const rotateCCW = () => setRotation((r) => r - 90);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const zoomPan = useZoomPan([state.currentIndex, state.galleryIndex]);
 
@@ -39,7 +45,7 @@ function SlideshowContainer() {
 
   const navigate = useCallback(async (direction: "next" | "prev") => {
     if (pendingRef.current) return;
-    const { posts, currentIndex, mediaFilter } = state;
+    const { posts, currentIndex, mediaFilter } = stateRef.current;
 
     // Find target index
     let targetIdx: number | null = null;
@@ -68,23 +74,32 @@ function SlideshowContainer() {
     }
 
     dispatch({ type: "SET_INDEX", payload: targetIdx });
-  }, [state, dispatch]);
+  }, [dispatch]);
 
   const next = useCallback(() => navigate("next"), [navigate]);
   const prev = useCallback(() => navigate("prev"), [navigate]);
 
   const currentPost = state.posts[state.currentIndex] ?? null;
+  const videoPlayback = useVideoPlayback(videoRef, audioRef, currentPost?.id);
 
-  // Auto-advance timer
+  const toggleAutoplay = useCallback(() => {
+    dispatch({ type: "TOGGLE_AUTOPLAY" });
+  }, [dispatch]);
+
+  const toggleAutoplayPlay = useCallback(() => {
+    dispatch({ type: "TOGGLE_PLAY" });
+  }, [dispatch]);
+
+  // Auto-advance timer (only runs in autoplay mode)
   const nextRef = useRef(next);
   nextRef.current = next;
   useEffect(() => {
-    if (!state.isPlaying || state.posts.length === 0 || currentPost?.media_type === "embed") return;
+    if (!state.autoplayMode || !state.isPlaying || state.posts.length === 0 || currentPost?.media_type === "embed") return;
     const id = window.setInterval(() => nextRef.current(), state.timerSpeed);
     return () => clearInterval(id);
-  }, [state.isPlaying, state.timerSpeed, state.posts.length, currentPost?.media_type]);
+  }, [state.autoplayMode, state.isPlaying, state.timerSpeed, state.posts.length, currentPost?.media_type]);
 
-  useKeyboard(next, prev, togglePlay, saveCurrentPost, rotateCCW, zoomPan.resetZoom);
+  useKeyboard(next, prev, videoPlayback, saveCurrentPost, rotateCCW, zoomPan.resetZoom);
   const uiVisible = useIdleHide(2500);
 
   return (
@@ -92,11 +107,15 @@ function SlideshowContainer() {
       <SlideshowView
         onNext={next}
         onPrev={prev}
-        onTogglePlay={togglePlay}
+        onToggleAutoplayPlay={toggleAutoplayPlay}
+        onToggleAutoplay={toggleAutoplay}
         onRotate={rotateCCW}
         rotation={rotation}
         uiVisible={uiVisible}
         zoomPan={zoomPan}
+        videoRef={videoRef}
+        audioRef={audioRef}
+        videoPlayback={videoPlayback}
       />
       {isPending && <LoadingSpinner />}
     </>

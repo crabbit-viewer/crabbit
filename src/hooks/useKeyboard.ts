@@ -1,11 +1,12 @@
 import { useEffect, useContext, useCallback } from "react";
 import { invoke } from "../invoke";
 import { AppStateContext, AppDispatchContext } from "../state/context";
+import type { VideoPlayback } from "./useVideoPlayback";
 
 export function useKeyboard(
   next: () => void,
   prev: () => void,
-  togglePlay: () => void,
+  videoPlayback: VideoPlayback | null,
   savePost: () => void,
   rotate: () => void,
   resetZoom: () => void,
@@ -63,7 +64,9 @@ export function useKeyboard(
           break;
         case " ":
           e.preventDefault();
-          togglePlay();
+          if (videoPlayback) {
+            videoPlayback.togglePlay();
+          }
           break;
         case "t":
         case "T":
@@ -122,7 +125,7 @@ export function useKeyboard(
           break;
       }
     },
-    [next, prev, togglePlay, savePost, rotate, resetZoom, dispatch, currentPost, state.galleryIndex, state.volume, state.viewMode, state.savedDisplayMode, state.sidebarOpen]
+    [next, prev, videoPlayback, savePost, rotate, resetZoom, dispatch, currentPost, state.galleryIndex, state.volume, state.viewMode, state.savedDisplayMode, state.sidebarOpen]
   );
 
   useEffect(() => {

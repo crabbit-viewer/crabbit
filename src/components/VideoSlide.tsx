@@ -131,7 +131,7 @@ export function VideoSlide({ item, audioUrl, isGif, rotation, videoRef, audioRef
     video.autoplay = true;
     video.loop = true;
     video.playsInline = true;
-    video.controls = !isGif && rotation === 0;
+    video.controls = false;
     video.muted = isGif || (!!audioUrl ? true : isMuted);
   }, [isGif, audioUrl, isMuted, ready, rotation]);
 

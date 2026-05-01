@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, RefObject } from "react";
 import { MediaPost } from "../types";
 import { ImageSlide } from "./ImageSlide";
 import { VideoSlide } from "./VideoSlide";
@@ -10,11 +10,11 @@ interface Props {
   post: MediaPost;
   rotation?: number;
   zoomPan?: ZoomPanState;
+  videoRef: RefObject<HTMLVideoElement | null>;
+  audioRef: RefObject<HTMLAudioElement | null>;
 }
 
-export function MediaDisplay({ post, rotation = 0, zoomPan }: Props) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
+export function MediaDisplay({ post, rotation = 0, zoomPan, videoRef, audioRef }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
   const [videoReady, setVideoReady] = useState(false);
@@ -73,6 +73,8 @@ export function MediaDisplay({ post, rotation = 0, zoomPan }: Props) {
         >
           <video
             ref={videoRef}
+            tabIndex={-1}
+            onFocus={(e) => e.currentTarget.blur()}
             style={{
               width: boxW ? `${boxW}px` : "100%",
               height: boxH ? `${boxH}px` : "100%",

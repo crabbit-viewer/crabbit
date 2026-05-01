@@ -1,8 +1,9 @@
-import { useContext, useCallback, useEffect, useState } from "react";
+import { useContext, useCallback, useEffect } from "react";
 import { invoke } from "../invoke";
 import { AppStateContext, AppDispatchContext } from "../state/context";
 import { useReddit } from "../hooks/useReddit";
 import { MediaFilter, MediaType } from "../types";
+import type { VideoPlayback } from "../hooks/useVideoPlayback";
 
 function matchesFilter(mediaType: MediaType, filter: MediaFilter): boolean {
   if (filter === "all") return true;
@@ -13,34 +14,25 @@ function matchesFilter(mediaType: MediaType, filter: MediaFilter): boolean {
 interface Props {
   onNext: () => void;
   onPrev: () => void;
-  onTogglePlay: () => void;
+  onToggleAutoplayPlay: () => void;
+  onToggleAutoplay: () => void;
   onSave: () => void;
   onDelete?: () => void;
   onRotate: () => void;
   showRotate: boolean;
   uiVisible: boolean;
+  videoPlayback: VideoPlayback | null;
 }
 
-export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, onRotate, showRotate, uiVisible }: Props) {
+export function ControlBar({ onNext, onPrev, onToggleAutoplayPlay, onToggleAutoplay, onSave, onDelete, onRotate, showRotate, uiVisible, videoPlayback }: Props) {
   const state = useContext(AppStateContext);
   const dispatch = useContext(AppDispatchContext);
   const { fetchPosts } = useReddit();
-  const [isFavorite, setIsFavorite] = useState(false);
 
   const currentPost = state.posts[state.currentIndex];
   const isSavedMode = state.viewMode === "saved";
   const isEmbed = currentPost?.media_type === "embed";
   const chromeClass = `ui-chrome ui-bottom ${uiVisible ? "" : "ui-hidden"}`;
-
-  useEffect(() => {
-    if (!currentPost) return;
-    if (isSavedMode) return;
-    invoke<string[]>("get_favorites").then((favs) => {
-      setIsFavorite(
-        favs.some((f) => f.toLowerCase() === currentPost.subreddit.toLowerCase())
-      );
-    });
-  }, [currentPost?.subreddit, isSavedMode]);
 
   useEffect(() => {
     if (!currentPost || isSavedMode) return;
@@ -66,18 +58,6 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, onR
     fetchPosts(`user/${currentPost.author}`);
   }, [currentPost, dispatch, fetchPosts]);
 
-  const toggleFavorite = useCallback(async () => {
-    if (!currentPost) return;
-    const sub = currentPost.subreddit;
-    if (isFavorite) {
-      await invoke("remove_favorite", { subreddit: sub });
-      setIsFavorite(false);
-    } else {
-      await invoke("add_favorite", { subreddit: sub });
-      setIsFavorite(true);
-    }
-  }, [currentPost, isFavorite]);
-
   const speeds = [3000, 5000, 8000, 12000];
   const cycleSpeed = () => {
     const idx = speeds.indexOf(state.timerSpeed);
@@ -97,28 +77,53 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, onR
 
   return (
     <div className={`absolute bottom-0 left-0 right-0 h-11 flex items-center px-3 text-white ${chromeClass}`} style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent)" }} data-ui-chrome>
-      {/* Group 1 — Playback */}
+      {/* Group 1 — Navigation & Playback */}
       <div className="flex items-center gap-0.5">
-        <button onClick={onPrev} className="icon-btn" title="Previous">
+        <button onClick={onPrev} className="icon-btn" title="Previous (A)">
           <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3.5 3v10a.5.5 0 001 0V3a.5.5 0 00-1 0zm8.354.854a.5.5 0 00-.708-.708l-5 5a.5.5 0 000 .708l5 5a.5.5 0 00.708-.708L7.207 8l4.647-4.646z"/></svg>
         </button>
-        <button onClick={onTogglePlay} className="icon-btn" title="Play/Pause (Space)">
-          {state.isPlaying ? (
-            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 3.5A1.5 1.5 0 017 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5zm5 0A1.5 1.5 0 0112 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5z"/></svg>
-          ) : (
-            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 3.804v8.392a.5.5 0 00.758.429l7.097-4.196a.5.5 0 000-.858L4.758 3.375A.5.5 0 004 3.804z"/></svg>
-          )}
-        </button>
-        <button onClick={onNext} className="icon-btn" title="Next">
+        {videoPlayback && (
+          <button onClick={videoPlayback.togglePlay} className="icon-btn" title="Play/Pause (Space)">
+            {videoPlayback.paused ? (
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 3.804v8.392a.5.5 0 00.758.429l7.097-4.196a.5.5 0 000-.858L4.758 3.375A.5.5 0 004 3.804z"/></svg>
+            ) : (
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 3.5A1.5 1.5 0 017 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5zm5 0A1.5 1.5 0 0112 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5z"/></svg>
+            )}
+          </button>
+        )}
+        <button onClick={onNext} className="icon-btn" title="Next (D)">
           <svg viewBox="0 0 16 16" fill="currentColor"><path d="M12.5 3v10a.5.5 0 01-1 0V3a.5.5 0 011 0zM4.146 3.146a.5.5 0 01.708 0l5 5a.5.5 0 010 .708l-5 5a.5.5 0 01-.708-.708L8.793 8 4.146 3.354a.5.5 0 010-.708z"/></svg>
         </button>
+
+        <div className="w-px h-4 bg-white/[0.06] mx-1" />
+
+        {/* Autoplay toggle */}
         <button
-          onClick={cycleSpeed}
-          className="text-white/25 hover:text-white/50 text-[11px] ml-1 tabular-nums transition-colors bg-white/[0.03] rounded px-1.5 py-0.5 font-mono"
-          title="Timer speed"
+          onClick={onToggleAutoplay}
+          className={`icon-btn ${state.autoplayMode ? "active" : ""}`}
+          title="Auto-advance mode"
         >
-          {state.timerSpeed / 1000}s
+          {/* Timer/clock icon */}
+          <svg viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"/></svg>
         </button>
+        {state.autoplayMode && (
+          <>
+            <button onClick={onToggleAutoplayPlay} className="icon-btn" title={state.isPlaying ? "Pause auto-advance" : "Start auto-advance"}>
+              {state.isPlaying ? (
+                <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 3.5A1.5 1.5 0 017 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5zm5 0A1.5 1.5 0 0112 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5z"/></svg>
+              ) : (
+                <svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 3.804v8.392a.5.5 0 00.758.429l7.097-4.196a.5.5 0 000-.858L4.758 3.375A.5.5 0 004 3.804z"/></svg>
+              )}
+            </button>
+            <button
+              onClick={cycleSpeed}
+              className="text-white/25 hover:text-white/50 text-[11px] ml-1 tabular-nums transition-colors bg-white/[0.03] rounded px-1.5 py-0.5 font-mono"
+              title="Timer speed"
+            >
+              {state.timerSpeed / 1000}s
+            </button>
+          </>
+        )}
       </div>
 
       {/* Group 2 — Post counter (centered) */}
@@ -185,17 +190,6 @@ export function ControlBar({ onNext, onPrev, onTogglePlay, onSave, onDelete, onR
               disabled={isEmbed}
             >
               <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"/></svg>
-            </button>
-            <button
-              onClick={toggleFavorite}
-              className={`icon-btn ${isFavorite ? "!text-[var(--accent-fav)]" : ""}`}
-              title="Favorite subreddit"
-            >
-              {isFavorite ? (
-                <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-              ) : (
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-              )}
             </button>
             <button onClick={ignoreUser} className="icon-btn" title="Ignore user">
               <svg viewBox="0 0 20 20" fill="currentColor"><path d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" fillRule="evenodd" clipRule="evenodd"/></svg>

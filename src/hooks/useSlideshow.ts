@@ -37,9 +37,11 @@ export function useSlideshow() {
         if (!matches) continue;
       }
       preloaded++;
-      if (post.media_type === "image" && post.media[0]) {
-        const img = new Image();
-        img.src = post.media[0].url;
+      if ((post.media_type === "image" || post.media_type === "gallery") && post.media.length > 0) {
+        for (const item of post.media) {
+          const img = new Image();
+          img.src = item.url;
+        }
       } else if ((post.media_type === "video" || post.media_type === "animated_gif") && post.media[0]) {
         invoke("preload_video", { url: post.media[0].url }).catch(() => {});
         if (post.audio_url) {
