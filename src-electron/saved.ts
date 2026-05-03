@@ -17,6 +17,7 @@ export interface SavedPostMeta {
   saved_at: string;
   files: string[];
   audio_file: string | null;
+  thumbnail: string | null;
 }
 
 function sanitizeFilename(name: string): string {
@@ -106,6 +107,20 @@ export async function savePost(
     audioFile = audioName;
   }
 
+  // Download thumbnail for video posts (used in grid view)
+  let thumbnail: string | null = null;
+  if (post.thumbnail_url && (post.media_type === "video" || post.media_type === "animated_gif")) {
+    try {
+      const thumbExt = extensionFromUrl(post.thumbnail_url);
+      const thumbName = `${base}_thumb.${thumbExt}`;
+      const thumbPath = path.join(subDir, thumbName);
+      await downloadFile(post.thumbnail_url, thumbPath);
+      thumbnail = thumbName;
+    } catch (e) {
+      console.error(`[save] Thumbnail download failed: ${e}`);
+    }
+  }
+
   const meta: SavedPostMeta = {
     id: post.id,
     title: post.title,
@@ -118,6 +133,7 @@ export async function savePost(
     saved_at: new Date().toISOString(),
     files,
     audio_file: audioFile,
+    thumbnail,
   };
 
   // Write sidecar JSON

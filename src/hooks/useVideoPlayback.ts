@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, RefObject } from "react";
+import { useEffect, useRef, useState, useCallback, RefObject } from "react";
 
 export interface VideoPlayback {
   currentTime: number;
@@ -18,7 +18,19 @@ export function useVideoPlayback(
   const [paused, setPaused] = useState(true);
   const [hasVideo, setHasVideo] = useState(false);
 
-  // Track the video element across post changes
+  // Track the actual DOM element so we re-bind listeners when it changes
+  // (e.g. switching from saved grid → slideshow mounts a new <video>).
+  const boundEl = useRef<HTMLVideoElement | null>(null);
+  const [elVersion, setElVersion] = useState(0);
+
+  useEffect(() => {
+    if (videoRef.current !== boundEl.current) {
+      boundEl.current = videoRef.current;
+      setElVersion((v) => v + 1);
+    }
+  });
+
+  // Track the video element across post changes and element swaps
   useEffect(() => {
     const video = videoRef.current;
     if (!video) {
@@ -55,7 +67,7 @@ export function useVideoPlayback(
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
     };
-  }, [postId, videoRef]);
+  }, [postId, elVersion, videoRef]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;

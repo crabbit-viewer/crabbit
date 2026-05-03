@@ -103,7 +103,7 @@ export type AppAction =
   | { type: "SET_MEDIA_FILTER"; payload: MediaFilter }
   | { type: "TOGGLE_SIDEBAR" }
   | { type: "SET_SIDEBAR"; payload: boolean }
-  | { type: "UPDATE_POSTS"; payload: Array<{ id: string; media_type: MediaType; media: MediaPost["media"]; embed_url: string | null }> }
+  | { type: "UPDATE_POSTS"; payload: Array<{ id: string; media_type: MediaType; media: MediaPost["media"]; embed_url: string | null; thumbnail_url?: string | null }> }
   | { type: "TOGGLE_AUTOPLAY" };
 
 export function appReducer(state: AppState, action: AppAction): AppState {
@@ -255,7 +255,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const updatedPosts = state.posts.map((post) => {
         const update = updateMap.get(post.id);
         if (update) {
-          return { ...post, media_type: update.media_type, media: update.media, embed_url: update.embed_url };
+          return {
+            ...post,
+            media_type: update.media_type,
+            media: update.media,
+            embed_url: update.embed_url,
+            thumbnail_url: update.thumbnail_url ?? post.thumbnail_url,
+          };
         }
         return post;
       });

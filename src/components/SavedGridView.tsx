@@ -19,12 +19,16 @@ function TileThumbnail({ post }: { post: MediaPost }) {
   if (post.media_type === "video" || post.media_type === "animated_gif") {
     return (
       <>
-        <video
-          src={url}
-          preload="metadata"
-          muted
-          className="w-full h-full object-cover pointer-events-none"
-        />
+        {post.thumbnail_url ? (
+          <img src={post.thumbnail_url} className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <video
+            src={url}
+            preload="metadata"
+            muted
+            className="w-full h-full object-cover pointer-events-none"
+          />
+        )}
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
             <svg className="w-5 h-5 text-white/80 ml-0.5" viewBox="0 0 24 24" fill="currentColor">

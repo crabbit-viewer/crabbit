@@ -29,9 +29,12 @@ function parsePost(post: any): MediaPost | null {
   const domain: string = post.domain ?? "";
   const postHint: string = post.post_hint ?? "";
 
+  const thumbnailUrl: string | null = post.preview?.images?.[0]?.source?.url ?? null;
+
   const base: MediaPost = {
     id, title, author, score, num_comments, permalink, subreddit, over_18,
     media_type: "image", media: [], audio_url: null, embed_url: null,
+    thumbnail_url: thumbnailUrl,
   };
 
   // 1. Gallery

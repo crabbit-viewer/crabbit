@@ -17,6 +17,10 @@ function metaToMediaPost(meta: SavedPostMeta): MediaPost {
     ? `saved-media://localhost/${sub}/${encodeURIComponent(meta.audio_file)}`
     : null;
 
+  const thumbnail_url = meta.thumbnail
+    ? `saved-media://localhost/${sub}/${encodeURIComponent(meta.thumbnail)}`
+    : null;
+
   return {
     id: meta.id,
     title: meta.title,
@@ -30,6 +34,7 @@ function metaToMediaPost(meta: SavedPostMeta): MediaPost {
     media,
     audio_url,
     embed_url: null,
+    thumbnail_url,
   };
 }
 

@@ -23,6 +23,7 @@ export interface MediaPost {
   media: MediaItem[];
   audio_url: string | null;
   embed_url: string | null;
+  thumbnail_url: string | null;
 }
 
 export interface FetchResult {
@@ -42,6 +43,7 @@ export interface SavedPostMeta {
   saved_at: string;
   files: string[];
   audio_file: string | null;
+  thumbnail: string | null;
 }
 
 export interface FetchParams {

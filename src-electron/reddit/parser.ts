@@ -29,6 +29,9 @@ function parsePost(post: any): MediaPost | null {
   const domain: string = post.domain ?? "";
   const postHint: string = post.post_hint ?? "";
 
+  // Extract thumbnail from Reddit preview data (useful for video posts in grid views)
+  const thumbnailUrl: string | null = post.preview?.images?.[0]?.source?.url ?? null;
+
   const base: MediaPost = {
     id,
     title,
@@ -42,6 +45,7 @@ function parsePost(post: any): MediaPost | null {
     media: [],
     audio_url: null,
     embed_url: null,
+    thumbnail_url: thumbnailUrl,
   };
 
   // 1. Gallery

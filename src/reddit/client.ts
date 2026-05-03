@@ -7,7 +7,7 @@ import type { FetchParams, FetchResult, MediaPost, MediaType } from "../types";
 
 export interface FetchPostsResult {
   result: FetchResult;
-  deferredUpdates: Promise<Array<{ id: string; media_type: MediaType; media: MediaPost["media"]; embed_url: string | null }>> | null;
+  deferredUpdates: Promise<Array<{ id: string; media_type: MediaType; media: MediaPost["media"]; embed_url: string | null; thumbnail_url?: string | null }>> | null;
 }
 
 export async function fetchPosts(params: FetchParams): Promise<FetchPostsResult> {
@@ -16,10 +16,12 @@ export async function fetchPosts(params: FetchParams): Promise<FetchPostsResult>
   const limit = Math.min(params.limit ?? 25, 100);
   const t0 = performance.now();
 
-  const base = params.subreddit.startsWith("user/")
-    ? `https://www.reddit.com/user/${params.subreddit.slice(5)}/submitted/${sort}.json`
+  const isUser = params.subreddit.startsWith("user/");
+  const base = isUser
+    ? `https://www.reddit.com/user/${params.subreddit.slice(5)}/submitted.json`
     : `https://www.reddit.com/r/${params.subreddit}/${sort}.json`;
   let url = `${base}?limit=${limit}&raw_json=1`;
+  if (isUser) url += `&sort=${sort}`;
   if (params.after) url += `&after=${params.after}`;
   if (sort === "top" || sort === "controversial") url += `&t=${timeRange}`;
 
@@ -51,15 +53,18 @@ export async function fetchPosts(params: FetchParams): Promise<FetchPostsResult>
     try {
       token = await redgifsToken();
       const earlyResults = await Promise.allSettled(
-        early.map(({ slug }) => redgifsVideoUrl(token!, slug))
+        early.map(({ slug }) => redgifsResolve(token!, slug))
       );
       for (let i = 0; i < early.length; i++) {
         const { index, slug } = early[i];
         const r = earlyResults[i];
         if (r.status === "fulfilled") {
           result.posts[index].media_type = "video" as MediaType;
-          result.posts[index].media = [{ url: r.value, width: null, height: null, caption: null }];
+          result.posts[index].media = [{ url: r.value.videoUrl, width: null, height: null, caption: null }];
           result.posts[index].embed_url = null;
+          if (r.value.thumbnailUrl) {
+            result.posts[index].thumbnail_url = r.value.thumbnailUrl;
+          }
         } else {
           result.posts[index].embed_url = `https://www.redgifs.com/ifr/${slug}`;
         }
@@ -81,9 +86,9 @@ export async function fetchPosts(params: FetchParams): Promise<FetchPostsResult>
     if (deferred.length > 0 && token) {
       const capturedToken = token;
       deferredUpdates = Promise.allSettled(
-        deferred.map(({ slug }) => redgifsVideoUrl(capturedToken, slug))
+        deferred.map(({ slug }) => redgifsResolve(capturedToken, slug))
       ).then((results) => {
-        const updates: Array<{ id: string; media_type: MediaType; media: MediaPost["media"]; embed_url: string | null }> = [];
+        const updates: Array<{ id: string; media_type: MediaType; media: MediaPost["media"]; embed_url: string | null; thumbnail_url?: string | null }> = [];
         for (let i = 0; i < deferred.length; i++) {
           const { index } = deferred[i];
           const r = results[i];
@@ -91,8 +96,9 @@ export async function fetchPosts(params: FetchParams): Promise<FetchPostsResult>
             updates.push({
               id: result.posts[index].id,
               media_type: "video" as MediaType,
-              media: [{ url: r.value, width: null, height: null, caption: null }],
+              media: [{ url: r.value.videoUrl, width: null, height: null, caption: null }],
               embed_url: null,
+              thumbnail_url: r.value.thumbnailUrl,
             });
           }
         }
@@ -119,13 +125,19 @@ async function redgifsToken(): Promise<string> {
   return data.token;
 }
 
-async function redgifsVideoUrl(token: string, slug: string): Promise<string> {
+interface RedgifsResult {
+  videoUrl: string;
+  thumbnailUrl: string | null;
+}
+
+async function redgifsResolve(token: string, slug: string): Promise<RedgifsResult> {
   const resp = await fetch(`https://api.redgifs.com/v2/gifs/${slug}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!resp.ok) throw new Error(`RedGifs fetch failed: ${resp.status}`);
   const data: any = await resp.json();
-  const url = data?.gif?.urls?.hd ?? data?.gif?.urls?.sd;
-  if (!url) throw new Error(`No video URL for '${slug}'`);
-  return url;
+  const videoUrl = data?.gif?.urls?.hd ?? data?.gif?.urls?.sd;
+  if (!videoUrl) throw new Error(`No video URL for '${slug}'`);
+  const thumbnailUrl: string | null = data?.gif?.urls?.thumbnail ?? data?.gif?.urls?.poster ?? null;
+  return { videoUrl, thumbnailUrl };
 }

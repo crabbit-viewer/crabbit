@@ -129,7 +129,7 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
     // Skip if sort/timeRange haven't actually changed (e.g. initial preference load)
     if (sortTimeRef.current.sort === state.sort && sortTimeRef.current.timeRange === state.timeRange) return;
     sortTimeRef.current = { sort: state.sort, timeRange: state.timeRange };
-    if (state.subreddit && state.posts.length > 0 && !isSavedMode) {
+    if (state.subreddit && (state.posts.length > 0 || isUserBrowse) && (!isSavedMode || isUserBrowse)) {
       fetchPosts();
     }
   }, [state.sort, state.timeRange]);
@@ -137,11 +137,16 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
   const showTimeRange = state.sort === "top" || state.sort === "controversial";
 
   if (isSavedMode) {
+    const isBrowsingUser = isUserBrowse;
     return (
       <div className={`absolute top-0 left-0 right-0 h-11 flex items-center px-4 gap-3 z-10 ${chromeClass}`} style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)" }} data-ui-chrome>
         <span className="text-white/20 font-semibold text-sm tracking-tight">crabbit</span>
         <div className="w-px h-5 bg-white/[0.08]" />
-        <span className="text-[var(--accent)] text-xs font-medium">Saved</span>
+        {isBrowsingUser ? (
+          <span className="text-[var(--accent)] text-xs font-medium">u/{state.subreddit.slice(5)}</span>
+        ) : (
+          <span className="text-[var(--accent)] text-xs font-medium">Saved</span>
+        )}
         <button
           onClick={() => dispatch({
             type: "SET_SAVED_DISPLAY_MODE",
@@ -163,8 +168,47 @@ export function SubredditBar({ uiVisible }: SubredditBarProps) {
             </svg>
           )}
         </button>
+        {isBrowsingUser && (
+          <div className="pill-group">
+            <Dropdown
+              value={state.sort}
+              options={[
+                { value: "hot", label: "Hot" },
+                { value: "new", label: "New" },
+                { value: "top", label: "Top" },
+                { value: "controversial", label: "Controversial" },
+              ]}
+              onChange={handleSortChange}
+            />
+            {showTimeRange && (
+              <Dropdown
+                value={state.timeRange}
+                options={[
+                  { value: "hour", label: "Hour" },
+                  { value: "day", label: "Day" },
+                  { value: "week", label: "Week" },
+                  { value: "month", label: "Month" },
+                  { value: "year", label: "Year" },
+                  { value: "all", label: "All Time" },
+                ]}
+                onChange={handleTimeChange}
+              />
+            )}
+            {state.posts.length > 0 && (
+              <Dropdown
+                value={state.mediaFilter}
+                options={[
+                  { value: "all", label: "All" },
+                  { value: "photos", label: "Photos" },
+                  { value: "animated", label: "Animated" },
+                ]}
+                onChange={(v) => dispatch({ type: "SET_MEDIA_FILTER", payload: v as MediaFilter })}
+              />
+            )}
+          </div>
+        )}
         <button
-          onClick={exitSavedView}
+          onClick={isBrowsingUser ? () => loadSavedPosts() : exitSavedView}
           className="text-white/40 hover:text-white text-xs ml-auto transition-colors"
         >
           Back

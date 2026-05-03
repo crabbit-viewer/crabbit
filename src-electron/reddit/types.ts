@@ -23,6 +23,7 @@ export interface MediaPost {
   media: MediaItem[];
   audio_url: string | null;
   embed_url: string | null;
+  thumbnail_url: string | null;
 }
 
 export interface FetchResult {
