@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import { useContext, useState, useEffect, useCallback, useRef } from "react";
 import { AppStateContext, AppDispatchContext } from "../state/context";
 import { MediaPost } from "../types";
 
@@ -62,11 +62,91 @@ function TileThumbnail({ post }: { post: MediaPost }) {
 export function SavedGridView() {
   const state = useContext(AppStateContext);
   const dispatch = useContext(AppDispatchContext);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const tileRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [cols, setCols] = useState(4);
 
-  const openPost = (index: number) => {
+  const openPost = useCallback((index: number) => {
     dispatch({ type: "SET_INDEX", payload: index });
     dispatch({ type: "SET_SAVED_DISPLAY_MODE", payload: "slideshow" });
-  };
+  }, [dispatch]);
+
+  // Track grid column count
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const update = () => {
+      const style = getComputedStyle(el);
+      const c = style.gridTemplateColumns.split(" ").length;
+      setCols(c);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [state.posts.length]);
+
+  // Scroll selected tile into view
+  useEffect(() => {
+    tileRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    if (state.posts.length === 0) return;
+    const total = state.posts.length;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      switch (e.key) {
+        case "ArrowRight":
+        case "d":
+        case "D":
+          e.preventDefault();
+          setSelectedIndex((i) => Math.min(i + 1, total - 1));
+          break;
+        case "ArrowLeft":
+        case "a":
+        case "A":
+          e.preventDefault();
+          setSelectedIndex((i) => Math.max(i - 1, 0));
+          break;
+        case "ArrowDown":
+        case "s":
+        case "S":
+          e.preventDefault();
+          setSelectedIndex((i) => {
+            const next = i + cols;
+            return next < total ? next : i;
+          });
+          break;
+        case "ArrowUp":
+        case "w":
+        case "W":
+          e.preventDefault();
+          setSelectedIndex((i) => {
+            const next = i - cols;
+            return next >= 0 ? next : i;
+          });
+          break;
+        case " ":
+        case "Enter":
+          e.preventDefault();
+          openPost(selectedIndex);
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [state.posts.length, cols, selectedIndex, openPost]);
 
   if (state.posts.length === 0) {
     return (
@@ -78,12 +158,13 @@ export function SavedGridView() {
 
   return (
     <div className="w-full h-full overflow-y-auto pt-12 pb-4 px-4">
-      <div className="grid grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1920px]:grid-cols-7 min-[2400px]:grid-cols-8 gap-3">
+      <div ref={gridRef} className="grid grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1920px]:grid-cols-7 min-[2400px]:grid-cols-8 gap-3">
         {state.posts.map((post, index) => (
           <button
             key={post.id}
+            ref={(el) => { tileRefs.current[index] = el; }}
             onClick={() => openPost(index)}
-            className="group relative rounded-xl overflow-hidden bg-[var(--surface-2)] border border-white/[0.06] hover:border-white/[0.15] transition-all duration-200 hover:shadow-lg hover:shadow-black/30 hover:scale-[1.02] text-left"
+            className={`group relative rounded-xl overflow-hidden bg-[var(--surface-2)] border border-white/[0.06] hover:border-white/[0.15] transition-all duration-200 hover:shadow-lg hover:shadow-black/30 hover:scale-[1.02] text-left ${selectedIndex === index ? "ring-2 ring-[var(--accent)] border-white/[0.15]" : ""}`}
           >
             <div className="relative aspect-[4/3] overflow-hidden bg-black">
               <TileThumbnail post={post} />

@@ -15,6 +15,10 @@ export function useKeyboard(
   const dispatch = useContext(AppDispatchContext);
   const currentPost = state.posts[state.currentIndex];
 
+  const isHomePage = state.viewMode === "slideshow" && state.posts.length === 0;
+  const isSavedGrid = state.viewMode === "saved" && state.savedDisplayMode === "grid";
+  const isGridView = isHomePage || isSavedGrid;
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       // Don't handle keys when typing in an input
@@ -22,6 +26,33 @@ export function useKeyboard(
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
       ) {
+        return;
+      }
+
+      // On grid views (HomePage, SavedGridView), only handle Escape and debug keys
+      // Arrow/WASD/Space are handled by the grid components themselves
+      if (isGridView) {
+        switch (e.key) {
+          case "Escape":
+            if (state.sidebarOpen) {
+              dispatch({ type: "SET_SIDEBAR", payload: false });
+            } else if (document.fullscreenElement) {
+              document.exitFullscreen();
+            } else if (isSavedGrid) {
+              dispatch({ type: "EXIT_SAVED_VIEW" });
+            }
+            break;
+          case "`":
+            invoke("dump_video_cache").then((paths) => {
+              console.log("[dump]", paths);
+              alert(`Dumped ${(paths as string[]).length} videos to /tmp`);
+            }).catch((e) => alert(`Dump failed: ${e}`));
+            break;
+          case "F12":
+            e.preventDefault();
+            invoke("toggle_devtools").catch(() => {});
+            break;
+        }
         return;
       }
 
@@ -95,6 +126,8 @@ export function useKeyboard(
             document.exitFullscreen();
           } else if (state.viewMode === "saved" && state.savedDisplayMode === "slideshow") {
             dispatch({ type: "SET_SAVED_DISPLAY_MODE", payload: "grid" });
+          } else if (state.viewMode === "slideshow" && state.posts.length > 0) {
+            dispatch({ type: "GO_HOME" });
           }
           break;
         case "r":
@@ -125,7 +158,7 @@ export function useKeyboard(
           break;
       }
     },
-    [next, prev, videoPlayback, savePost, rotate, resetZoom, dispatch, currentPost, state.galleryIndex, state.volume, state.viewMode, state.savedDisplayMode, state.sidebarOpen]
+    [next, prev, videoPlayback, savePost, rotate, resetZoom, dispatch, currentPost, state.galleryIndex, state.volume, state.viewMode, state.savedDisplayMode, state.sidebarOpen, state.posts.length, isGridView, isSavedGrid]
   );
 
   useEffect(() => {

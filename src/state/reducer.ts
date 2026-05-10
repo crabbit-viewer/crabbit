@@ -104,7 +104,8 @@ export type AppAction =
   | { type: "TOGGLE_SIDEBAR" }
   | { type: "SET_SIDEBAR"; payload: boolean }
   | { type: "UPDATE_POSTS"; payload: Array<{ id: string; media_type: MediaType; media: MediaPost["media"]; embed_url: string | null; thumbnail_url?: string | null }> }
-  | { type: "TOGGLE_AUTOPLAY" };
+  | { type: "TOGGLE_AUTOPLAY" }
+  | { type: "GO_HOME" };
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -275,6 +276,20 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         isPlaying: entering ? state.isPlaying : false,
       };
     }
+    case "GO_HOME":
+      return {
+        ...state,
+        subreddit: "",
+        posts: [],
+        currentIndex: 0,
+        galleryIndex: 0,
+        after: null,
+        isPlaying: false,
+        autoplayMode: false,
+        error: null,
+        viewMode: "slideshow" as const,
+        previousView: null,
+      };
     default:
       return state;
   }

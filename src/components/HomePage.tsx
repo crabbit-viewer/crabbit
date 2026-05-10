@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useCallback, useContext, useRef } from "react";
 import { invoke } from "../invoke";
 import { AppDispatchContext } from "../state/context";
 import { useReddit } from "../hooks/useReddit";
@@ -26,15 +26,106 @@ export function HomePage() {
   const dispatch = useContext(AppDispatchContext);
   const { fetchPosts } = useReddit();
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState(-1); // -1 = "Browse All" button
+  const gridRef = useRef<HTMLDivElement>(null);
+  const browseAllRef = useRef<HTMLButtonElement>(null);
+  const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [cols, setCols] = useState(2);
 
   useEffect(() => {
     invoke<string[]>("get_favorites").then(setFavorites).catch(() => {});
   }, []);
 
-  const loadSubreddit = (sub: string) => {
+  // Track grid column count via ResizeObserver
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const update = () => {
+      const style = getComputedStyle(el);
+      const c = style.gridTemplateColumns.split(" ").length;
+      setCols(c);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [favorites]);
+
+  // Scroll selected item into view
+  useEffect(() => {
+    if (selectedIndex === -1) {
+      browseAllRef.current?.scrollIntoView({ block: "nearest" });
+    } else {
+      cardRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
+    }
+  }, [selectedIndex]);
+
+  const loadSubreddit = useCallback((sub: string) => {
     dispatch({ type: "SET_PLAYING", payload: false });
     fetchPosts(sub);
-  };
+  }, [dispatch, fetchPosts]);
+
+  // Keyboard navigation for favorites grid
+  useEffect(() => {
+    if (favorites.length === 0) return;
+    const totalItems = favorites.length; // 0..totalItems-1 for cards, -1 for Browse All
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      switch (e.key) {
+        case "ArrowRight":
+        case "d":
+        case "D":
+          e.preventDefault();
+          setSelectedIndex((i) => Math.min(i + 1, totalItems - 1));
+          break;
+        case "ArrowLeft":
+        case "a":
+        case "A":
+          e.preventDefault();
+          setSelectedIndex((i) => Math.max(i - 1, -1));
+          break;
+        case "ArrowDown":
+        case "s":
+        case "S":
+          e.preventDefault();
+          setSelectedIndex((i) => {
+            if (i === -1) return Math.min(0, totalItems - 1);
+            const next = i + cols;
+            return next < totalItems ? next : i;
+          });
+          break;
+        case "ArrowUp":
+        case "w":
+        case "W":
+          e.preventDefault();
+          setSelectedIndex((i) => {
+            if (i < 0) return -1;
+            const next = i - cols;
+            return next >= 0 ? next : -1;
+          });
+          break;
+        case " ":
+        case "Enter":
+          e.preventDefault();
+          if (selectedIndex === -1) {
+            loadSubreddit(favorites.join("+"));
+          } else if (selectedIndex >= 0 && selectedIndex < totalItems) {
+            loadSubreddit(favorites[selectedIndex]);
+          }
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [favorites, cols, selectedIndex, loadSubreddit]);
 
   if (favorites.length === 0) {
     return (
@@ -63,19 +154,22 @@ export function HomePage() {
       }}
     >
       <button
+        ref={browseAllRef}
         onClick={() => loadSubreddit(favorites.join("+"))}
-        className="mb-8 px-6 py-2.5 rounded-lg bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 text-sm font-medium transition-all border border-[var(--accent)]/15 hover:border-[var(--accent)]/30"
+        className={`mb-8 px-6 py-2.5 rounded-lg bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 text-sm font-medium transition-all border border-[var(--accent)]/15 hover:border-[var(--accent)]/30 ${selectedIndex === -1 ? "ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--surface-0)]" : ""}`}
       >
         Browse All Favorites
       </button>
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 max-w-3xl w-full">
-        {favorites.map((fav) => {
+      <div ref={gridRef} className="grid grid-cols-2 lg:grid-cols-3 gap-3 max-w-3xl w-full">
+        {favorites.map((fav, idx) => {
           const color = hashColor(fav);
+          const isSelected = selectedIndex === idx;
           return (
             <button
               key={fav}
+              ref={(el) => { cardRefs.current[idx] = el; }}
               onClick={() => loadSubreddit(fav)}
-              className="group w-full flex items-center gap-3 px-4 py-4 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] hover:border-white/[0.15] transition-all duration-200 hover:shadow-lg hover:shadow-black/20 hover:scale-[1.02]"
+              className={`group w-full flex items-center gap-3 px-4 py-4 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] hover:border-white/[0.15] transition-all duration-200 hover:shadow-lg hover:shadow-black/20 hover:scale-[1.02] ${isSelected ? "ring-2 ring-[var(--accent)] bg-white/[0.07] border-white/[0.15]" : ""}`}
               style={{ borderLeftWidth: 3, borderLeftColor: color + "40" }}
             >
               <span
