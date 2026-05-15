@@ -178,14 +178,15 @@ function youtubeEmbedUrl(url: string): string | null {
 }
 
 function redgifsSlug(url: string): string | null {
-  const parts = url.split("/watch/");
-  if (parts.length < 2) return null;
-  const slug = parts[parts.length - 1].split("?")[0];
-  return slug ? slug.toLowerCase() : null;
+  // Matches /watch/, /ifr/, and /i/ paths
+  const match = url.match(/redgifs\.com\/(?:watch|ifr|i)\/([a-zA-Z0-9]+)/);
+  if (match) return match[1].toLowerCase();
+  return null;
 }
 
 function redgifsSlugFromUrl(url: string): string | null {
-  const match = url.match(/redgifs\.com\/(?:watch|ifr)\/([a-zA-Z0-9]+)/);
+  // Handles /watch/, /ifr/, /i/, and other redgifs URL patterns
+  const match = url.match(/redgifs\.com\/(?:watch|ifr|i)\/([a-zA-Z0-9]+)/);
   if (match) return match[1].toLowerCase();
   return null;
 }

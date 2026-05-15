@@ -33,7 +33,7 @@ export function MediaDisplay({ post, rotation = 0, zoomPan, videoRef, audioRef }
     const url = post.media[0]?.url || post.embed_url || "(none)";
     console.log(`[slide] id=${post.id} type=${post.media_type} sub=${post.subreddit} title="${post.title.slice(0, 60)}" url=${url}`);
     setVideoReady(false);
-  }, [post.id]);
+  }, [post.id, post.media_type]);
 
   // Show video element once it has data to display
   useEffect(() => {
@@ -42,7 +42,7 @@ export function MediaDisplay({ post, rotation = 0, zoomPan, videoRef, audioRef }
     const show = () => setVideoReady(true);
     video.addEventListener("loadeddata", show);
     return () => video.removeEventListener("loadeddata", show);
-  }, [post.id]);
+  }, [post.id, post.media_type]);
 
   const isVideo = post.media_type === "video" || post.media_type === "animated_gif";
 

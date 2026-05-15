@@ -1,4 +1,4 @@
-import { useEffect, useContext, useCallback, useRef } from "react";
+import { useEffect, useContext, useCallback } from "react";
 import { invoke } from "../invoke";
 import { AppStateContext, AppDispatchContext } from "../state/context";
 import { useReddit } from "./useReddit";
@@ -22,11 +22,26 @@ export function useSlideshow() {
     }
   }, [state.currentIndex, state.posts.length, state.after, state.isLoading, fetchPosts]);
 
-  const postsRef = useRef(state.posts);
-  postsRef.current = state.posts;
+  // Build a fingerprint of upcoming posts' types/URLs so preloading re-runs
+  // when UPDATE_POSTS converts pending embeds to video
+  const upcomingKey = (() => {
+    const parts: string[] = [];
+    let count = 0;
+    for (let i = state.currentIndex + 1; i < state.posts.length && count < 3; i++) {
+      const p = state.posts[i];
+      if (state.mediaFilter !== "all") {
+        const isPhoto = p.media_type === "image" || p.media_type === "gallery";
+        const matches = state.mediaFilter === "photos" ? isPhoto : !isPhoto;
+        if (!matches) continue;
+      }
+      count++;
+      parts.push(`${p.id}:${p.media_type}:${p.media[0]?.url ?? ""}`);
+    }
+    return parts.join("|");
+  })();
 
   useEffect(() => {
-    const posts = postsRef.current;
+    const posts = state.posts;
     const filter = state.mediaFilter;
     let preloaded = 0;
     for (let i = state.currentIndex + 1; i < posts.length && preloaded < 3; i++) {
@@ -49,7 +64,7 @@ export function useSlideshow() {
         }
       }
     }
-  }, [state.currentIndex, state.mediaFilter]);
+  }, [state.currentIndex, state.mediaFilter, upcomingKey]);
 
   const togglePlay = useCallback(() => {
     dispatch({ type: "TOGGLE_PLAY" });

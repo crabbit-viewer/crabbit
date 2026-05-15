@@ -69,10 +69,8 @@ export async function fetchPosts(params: FetchParams, window: BrowserWindow | nu
       }
     }
 
-    // Set remaining redgifs to iframe embeds for now
-    for (const { index, slug } of deferred) {
-      result.posts[index].embed_url = `https://www.redgifs.com/ifr/${slug}`;
-    }
+    // Keep deferred posts as redgifs:slug — frontend shows a loading state.
+    // Background resolution will convert them to video or iframe fallback.
 
     const tEarly = performance.now();
     console.error(
@@ -202,13 +200,21 @@ function resolveRedgifsBackground(
           embed_url: null,
           thumbnail_url: result.value.thumbnailUrl,
         });
+      } else {
+        // Resolution failed — fall back to iframe embed
+        updates.push({
+          id: post.id,
+          media_type: "embed" as MediaType,
+          media: [],
+          embed_url: `https://www.redgifs.com/ifr/${redgifsIndices[i].slug}`,
+        });
       }
     }
 
     const elapsed = performance.now() - t0;
     console.error(`[redgifs] Background resolved ${updates.length}/${redgifsIndices.length} posts in ${elapsed.toFixed(0)}ms`);
 
-    if (updates.length > 0 && !window.isDestroyed()) {
+    if (!window.isDestroyed()) {
       window.webContents.send("redgifs-resolved", updates);
     }
   }).catch((err) => {

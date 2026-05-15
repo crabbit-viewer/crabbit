@@ -257,17 +257,15 @@ function youtubeEmbedUrl(url: string): string | null {
 }
 
 function redgifsSlug(url: string): string | null {
-  const parts = url.split("/watch/");
-  if (parts.length < 2) return null;
-  let slug = parts[parts.length - 1];
-  slug = slug.split("?")[0];
-  if (slug) return slug.toLowerCase();
+  // Matches /watch/, /ifr/, and /i/ paths
+  const match = url.match(/redgifs\.com\/(?:watch|ifr|i)\/([a-zA-Z0-9]+)/);
+  if (match) return match[1].toLowerCase();
   return null;
 }
 
 function redgifsSlugFromUrl(url: string): string | null {
-  // Handles /watch/, /ifr/, and other redgifs URL patterns
-  const match = url.match(/redgifs\.com\/(?:watch|ifr)\/([a-zA-Z0-9]+)/);
+  // Handles /watch/, /ifr/, /i/, and other redgifs URL patterns
+  const match = url.match(/redgifs\.com\/(?:watch|ifr|i)\/([a-zA-Z0-9]+)/);
   if (match) return match[1].toLowerCase();
   return null;
 }

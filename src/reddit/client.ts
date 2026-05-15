@@ -75,10 +75,8 @@ export async function fetchPosts(params: FetchParams): Promise<FetchPostsResult>
       }
     }
 
-    // Set remaining to iframe embeds
-    for (const { index, slug } of deferred) {
-      result.posts[index].embed_url = `https://www.redgifs.com/ifr/${slug}`;
-    }
+    // Keep deferred posts as redgifs:slug — frontend shows a loading state.
+    // Deferred resolution will convert them to video or iframe fallback.
 
     console.log(`[fetch_posts:renderer] ${result.posts.length} posts (${early.length} redgifs resolved, ${deferred.length} deferred) in ${(performance.now() - t0).toFixed(0)}ms`);
 
@@ -90,7 +88,7 @@ export async function fetchPosts(params: FetchParams): Promise<FetchPostsResult>
       ).then((results) => {
         const updates: Array<{ id: string; media_type: MediaType; media: MediaPost["media"]; embed_url: string | null; thumbnail_url?: string | null }> = [];
         for (let i = 0; i < deferred.length; i++) {
-          const { index } = deferred[i];
+          const { index, slug } = deferred[i];
           const r = results[i];
           if (r.status === "fulfilled") {
             updates.push({
@@ -99,6 +97,14 @@ export async function fetchPosts(params: FetchParams): Promise<FetchPostsResult>
               media: [{ url: r.value.videoUrl, width: null, height: null, caption: null }],
               embed_url: null,
               thumbnail_url: r.value.thumbnailUrl,
+            });
+          } else {
+            // Resolution failed — fall back to iframe embed
+            updates.push({
+              id: result.posts[index].id,
+              media_type: "embed" as MediaType,
+              media: [],
+              embed_url: `https://www.redgifs.com/ifr/${slug}`,
             });
           }
         }
