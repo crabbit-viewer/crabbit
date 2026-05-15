@@ -1,4 +1,4 @@
-import { useContext, useCallback, useEffect } from "react";
+import { useContext, useCallback, useEffect, useState } from "react";
 import { invoke } from "../invoke";
 import { AppStateContext, AppDispatchContext } from "../state/context";
 import { useReddit } from "../hooks/useReddit";
@@ -28,6 +28,11 @@ export function ControlBar({ onNext, onPrev, onToggleAutoplayPlay, onToggleAutop
   const state = useContext(AppStateContext);
   const dispatch = useContext(AppDispatchContext);
   const { fetchPosts } = useReddit();
+  const [appVersion, setAppVersion] = useState("");
+
+  useEffect(() => {
+    invoke<string>("app_version").then(setAppVersion).catch(() => {});
+  }, []);
 
   const currentPost = state.posts[state.currentIndex];
   const isSavedMode = state.viewMode === "saved";
@@ -126,10 +131,17 @@ export function ControlBar({ onNext, onPrev, onToggleAutoplayPlay, onToggleAutop
         )}
       </div>
 
-      {/* Group 2 — Post counter (centered) */}
-      <span className="text-white/20 text-[10px] tabular-nums select-none font-mono mx-auto">
-        {postCounter}
-      </span>
+      {/* Group 2 — Post counter + version (centered) */}
+      <div className="flex items-center gap-2 mx-auto">
+        <span className="text-white/20 text-[10px] tabular-nums select-none font-mono">
+          {postCounter}
+        </span>
+        {appVersion && (
+          <span className="text-white/10 text-[9px] select-none font-mono">
+            v{appVersion}
+          </span>
+        )}
+      </div>
 
       {/* Group 3 — Actions */}
       <div className="flex items-center gap-0.5">

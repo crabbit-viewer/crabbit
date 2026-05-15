@@ -97,6 +97,8 @@ function createWindow(): void {
 }
 
 function setupIPC(): void {
+  ipcMain.handle("app_version", () => app.getVersion());
+
   ipcMain.handle("fetch_posts", async (_event, args) => {
     return fetchPosts(args.params, mainWindow);
   });
@@ -434,9 +436,14 @@ app.whenReady().then(async () => {
   createWindow();
 
   // Check for updates (non-blocking, silent on no update)
-  autoUpdater.logger = null;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on("checking-for-update", () => console.error("[updater] Checking for update..."));
+  autoUpdater.on("update-available", (info) => console.error(`[updater] Update available: ${info.version}`));
+  autoUpdater.on("update-not-available", (info) => console.error(`[updater] Up to date: ${info.version}`));
+  autoUpdater.on("download-progress", (p) => console.error(`[updater] Download: ${p.percent.toFixed(1)}%`));
+  autoUpdater.on("update-downloaded", (info) => console.error(`[updater] Downloaded: ${info.version}, will install on quit`));
+  autoUpdater.on("error", (err) => console.error(`[updater] Error: ${err.message}`));
   autoUpdater.checkForUpdatesAndNotify();
 
   app.on("activate", () => {
